@@ -8,16 +8,18 @@ const sgs = async (serie, sinal) => Number((await json(`https://api.bcb.gov.br/d
 // Mediana das expectativas do mercado (Boletim Focus, Banco Central) para o fim de um ano
 const focus = async (indicador, ano, sinal) => {
   const q = `$top=1&$filter=Indicador eq '${indicador}' and DataReferencia eq '${ano}'&$orderby=Data desc&$format=json`;
-  return Number((await json(`https://olinda.bcb.gov.br/olinda/servico/Expectativas/versao/v1/odata/ExpectativasMercadoAnuais?${encodeURI(q)}`, sinal)).value[0].Mediana);
+  const x = (await json(`https://olinda.bcb.gov.br/olinda/servico/Expectativas/versao/v1/odata/ExpectativasMercadoAnuais?${encodeURI(q)}`, sinal)).value[0];
+  const [, m, dia] = String(x.Data).slice(0, 10).split("-");
+  return { valor: Number(x.Mediana), data: `${dia}/${m}` };
 };
 const TICKER = /^[A-Z]{4}\d{1,2}$/;
 
 // Cotação + últimos ~30 dias (fechamentos) de um papel ou índice, com cache de 10 min (a brapi grátis aceita 1 papel por pedido)
 const cacheQuote = new Map();
-async function quoteComSerie(simbolo, token, sinal) {
-  const chave = `${simbolo}|${token}`, c = cacheQuote.get(chave);
+async function quoteComSerie(simbolo, token, sinal, historico = true) {
+  const chave = `${simbolo}|${token}|${historico}`, c = cacheQuote.get(chave);
   if (c && Date.now() - c.t < 10 * 60 * 1000) return c.r;
-  const j = await json(`https://brapi.dev/api/quote/${encodeURIComponent(simbolo)}?range=1mo&interval=1d&token=${encodeURIComponent(token)}`, sinal);
+  const j = await json(`https://brapi.dev/api/quote/${encodeURIComponent(simbolo)}?${historico ? "range=1mo&interval=1d&" : ""}token=${encodeURIComponent(token)}`, sinal);
   const q = j.results[0];
   const r = { preco: Number(q.regularMarketPrice), variacao: Number(q.regularMarketChangePercent), serie: (q.historicalDataPrice || []).map((x) => Number(x.close)).filter(Number.isFinite) };
   cacheQuote.set(chave, { t: Date.now(), r });
@@ -25,9 +27,11 @@ async function quoteComSerie(simbolo, token, sinal) {
 }
 // Ibovespa: tenta o índice; se a fonte não entregar, usa o BOVA11 (ETF que replica o índice) só para variação e gráfico
 async function buscarIbov(token, sinal) {
-  try { return { ...(await quoteComSerie("^BVSP", token, sinal)), pontos: true }; } catch (e1) {
-    try { return { ...(await quoteComSerie("BOVA11", token, sinal)), pontos: false }; } catch (e2) { throw new Error(e2.message || e1.message); }
+  let ultimo = null;
+  for (const [simbolo, historico, pontos] of [["^BVSP", true, true], ["^BVSP", false, true], ["BOVA11", true, false], ["BOVA11", false, false]]) {
+    try { return { ...(await quoteComSerie(simbolo, token, sinal, historico)), pontos }; } catch (e) { ultimo = e; }
   }
+  throw new Error(ultimo?.message === "401" ? "401: o plano gratuito da brapi não libera o índice" : ultimo?.message || "sem resposta");
 }
 
 // Gráfico pequeno de linha (últimos 30 dias). Cor pela tendência do período.
@@ -168,11 +172,11 @@ export default function Panorama({ token }) {
         <div key={d.t} className="space-y-4">
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <Destaque titulo="Juros hoje" atraso={0} itens={[{ rotulo: "Selic atual", valor: d.selic, sub: "meta definida pelo Copom" }]} />
-            <Destaque titulo="Juros esperados" atraso={80} itens={[{ rotulo: `Selic no fim de ${d.ano}`, valor: d.selicA }, { rotulo: `Selic no fim de ${d.ano + 1}`, valor: d.selicB }]} />
+            <Destaque titulo="Juros esperados" atraso={80} itens={[{ rotulo: `Selic no fim de ${d.ano}`, valor: d.selicA?.valor, sub: d.selicA && `Focus de ${d.selicA.data}` }, { rotulo: `Selic no fim de ${d.ano + 1}`, valor: d.selicB?.valor, sub: d.selicB && `Focus de ${d.selicB.data}` }]} />
             <Destaque titulo="Inflação hoje" atraso={160} itens={[{ rotulo: "IPCA em 12 meses", valor: d.ipca12, sub: "inflação oficial" }]} />
-            <Destaque titulo="Inflação esperada" atraso={240} itens={[{ rotulo: `IPCA no fim de ${d.ano}`, valor: d.ipcaA }, { rotulo: `IPCA no fim de ${d.ano + 1}`, valor: d.ipcaB }]} />
+            <Destaque titulo="Inflação esperada" atraso={240} itens={[{ rotulo: `IPCA no fim de ${d.ano}`, valor: d.ipcaA?.valor, sub: d.ipcaA && `Focus de ${d.ipcaA.data}` }, { rotulo: `IPCA no fim de ${d.ano + 1}`, valor: d.ipcaB?.valor, sub: d.ipcaB && `Focus de ${d.ipcaB.data}` }]} />
           </div>
-          <p className="-mt-2 text-[11px] text-suave">Valores “esperados”: mediana do mercado no Boletim Focus (Banco Central).</p>
+          <p className="-mt-2 text-[11px] text-suave">Valores “esperados”: mediana de economistas no Boletim Focus (Banco Central), publicado às segundas com respostas da semana anterior. Ele demora a refletir choques como o das eleições; os juros futuros (DI) reagem na hora e já estão mais altos.</p>
           <Bloco titulo="Mercados" atraso={320}>
             <div className="grid gap-6 sm:grid-cols-2">
               <div className="space-y-3">
