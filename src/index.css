@@ -42,3 +42,10 @@ button { touch-action: manipulation; }
 
 .entrar { animation: entrar .28s ease; }
 @keyframes entrar { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: none; } }
+
+/* Entrada suave dos modais */
+@keyframes modal-fundo { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modal-subir { from { opacity: 0; transform: translateY(24px) scale(0.98); } to { opacity: 1; transform: none; } }
+.anim-fundo { animation: modal-fundo 0.2s ease-out both; }
+.anim-modal { animation: modal-subir 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@media (prefers-reduced-motion: reduce) { .anim-fundo, .anim-modal { animation: none; } }
