@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { addDoc, collection, doc, onSnapshot, query, serverTimestamp, where } from "firebase/firestore";
+import { addDoc, collection, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from "firebase/firestore";
 import { db } from "./firebase";
 import { brl, hoje, mesmoItem, saldoItem } from "./util.js";
 import { vincularOrfaos } from "./carteira.js";
@@ -84,6 +84,15 @@ export default function Cofrinhos({ uid, itens, cats, metas }) {
   const sem = inv.filter((l) => !todos.some((it) => mesmoItem(l, it, donoRend)));
   if (!todos.length && !sem.length) return null;
   const doMes = itens.filter((i) => i.tipo === "investimento");
+  // liga um lançamento solto ao cofrinho escolhido: o valor não muda, só passa a contar no saldo dele
+  async function ligar(l, investId) {
+    if (!investId) return;
+    setMsg("");
+    try {
+      await updateDoc(doc(db, "users", uid, "lancamentos", l.docId), { investId });
+      setMsg(`Lançamento de ${brl(Math.abs(l.valor))} ligado a ${todos.find((it) => it.id === investId)?.nome}.`);
+    } catch (e) { console.error(e); setMsg("Não consegui ligar. Verifique a internet e tente de novo."); }
+  }
   async function vincular() {
     setMsg("");
     try {
@@ -124,9 +133,23 @@ export default function Cofrinhos({ uid, itens, cats, metas }) {
         })}
         {sem.length > 0 && (
           <div className="rounded-2xl bg-[#141414] p-4 md:col-span-2">
-            <b>{sem.length} lançamento{sem.length > 1 && "s"} sem investimento na carteira</b>
-            <p className="mt-1 text-xs text-suave">Eles não estão em nenhum cofrinho, por isso não entram nos saldos acima. Toque abaixo para cadastrar na carteira o que faltar e ligar tudo. Nenhum valor é apagado ou alterado.</p>
-            <button type="button" onClick={vincular} className="mt-3 rounded-xl bg-neon px-4 py-2.5 text-sm font-bold text-white">Ligar à carteira</button>
+            <b>{sem.length} lançamento{sem.length > 1 && "s"} sem cofrinho na carteira</b>
+            <p className="mt-1 text-xs text-suave">Eles não entram em nenhum saldo acima. Escolha em qual cofrinho cada um entra: o valor não muda, só passa a contar no saldo dele.</p>
+            <ul className="mt-3 space-y-2">
+              {sem.map((l) => (
+                <li key={l.docId} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                  <span className="text-suave">{String(l.data || "").split("-").reverse().slice(0, 2).join("/")} · {l.rendimento ? "Rendimento" : l.valor < 0 ? "Resgate" : "Aporte"} · {l.categoria || "Outros"}{l.descricao && ` · ${l.descricao}`}</span>
+                  <span className="flex items-center gap-2">
+                    <b className="tabular-nums">{brl(l.valor)}</b>
+                    <select value="" onChange={(e) => ligar(l, e.target.value)} aria-label="Ligar a um cofrinho" className="rounded-lg border border-borda bg-[#141414] px-2 py-1.5 text-sm text-tinta">
+                      <option value="">Ligar a…</option>
+                      {todos.map((it) => <option key={it.id} value={it.id}>{it.nome}</option>)}
+                    </select>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <button type="button" onClick={vincular} className="mt-3 text-xs text-suave underline">Prefiro cadastrar tudo automaticamente pelo nome da categoria</button>
           </div>
         )}
       </div>
