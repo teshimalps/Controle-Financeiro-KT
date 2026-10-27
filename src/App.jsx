@@ -15,6 +15,8 @@ import { gerarFixos } from "./fixos.js";
 import { sincronizar } from "./carteira.js";
 import Perfil from "./Perfil.jsx";
 import Avatar from "./Avatar.jsx";
+import Olho from "./Olho.jsx";
+import { setOculto } from "./util.js";
 
 // [id, nome no computador, nome curto no celular]
 const abas = [
@@ -26,9 +28,11 @@ const PRINCIPAIS = ["chat", "resumo", "inv", "fixos"];
 
 export default function App() {
   const [user, setUser] = useState(undefined);
-  const [aba, setAba] = useState("chat");
+  const [aba, setAba] = useState("resumo");
   const [perfil, setPerfil] = useState({});
   const [mais, setMais] = useState(false);
+  const [oculto, setOcultoUI] = useState(true); // valores escondidos ao abrir; não fica salvo de propósito
+  setOculto(oculto); // as telas abaixo leem isso ao renderizar (brl, mascarar...)
   useEffect(() => onAuthStateChanged(auth, setUser), []);
   useEffect(() => {
     document.title = user ? "Ora Finance - Home" : user === null ? "Ora Finance - Login" : "Ora Finance";
@@ -64,7 +68,10 @@ export default function App() {
     <div className="altura-app flex flex-col md:flex-row">
       <header className="flex items-center justify-between border-b border-borda px-4 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] md:hidden">
         <img src="/logo.png" alt="Ora Finance" className="h-8 w-auto" />
-        <button onClick={() => setAba("perfil")} aria-label="Perfil"><Avatar foto={perfil.foto} nome={nome} tam={34} /></button>
+        <div className="flex items-center gap-2">
+          <Olho oculto={oculto} onClick={() => setOcultoUI(!oculto)} className="h-9 w-9" />
+          <button onClick={() => setAba("perfil")} aria-label="Perfil"><Avatar foto={perfil.foto} nome={nome} tam={34} /></button>
+        </div>
       </header>
       <aside className="hidden md:flex md:w-60 md:shrink-0 md:flex-col md:border-r md:border-borda md:p-5">
         <img src="/logo.png" alt="Ora Finance" className="mb-6 w-36 self-start" />
@@ -74,7 +81,8 @@ export default function App() {
               className={`rounded-xl px-4 py-2.5 text-left font-bold ${aba === id ? "bg-neon text-white shadow-[0_0_20px_rgba(0,87,255,.6)]" : "text-suave hover:text-tinta"}`}>{longo}</button>
           ))}
         </nav>
-        <button onClick={() => setAba("perfil")} className={`mt-auto flex items-center gap-3 rounded-xl p-2 text-left hover:bg-white/5 ${aba === "perfil" ? "bg-white/10" : ""}`}>
+        <Olho oculto={oculto} onClick={() => setOcultoUI(!oculto)} className="mt-auto h-10 w-10 self-start" />
+        <button onClick={() => setAba("perfil")} className={`mt-2 flex items-center gap-3 rounded-xl p-2 text-left hover:bg-white/5 ${aba === "perfil" ? "bg-white/10" : ""}`}>
           <Avatar foto={perfil.foto} nome={nome} tam={40} />
           <span className="truncate text-sm font-bold">{nome || "Perfil"}</span>
         </button>

@@ -1,4 +1,16 @@
-export const brl = (v) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+// Modo privacidade: com o olho fechado, todo valor em dinheiro aparece como "R$ •••••".
+// O App liga/desliga isso (começa sempre fechado) e re-renderiza as telas.
+let oculto = true;
+export const setOculto = (v) => { oculto = !!v; };
+export const estaOculto = () => oculto;
+export const MASCARA = "R$ •••••";
+// brl: para mostrar na tela (respeita o olho). brlReal: valor de verdade, para texto que será salvo.
+export const brlReal = (v) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+export const brl = (v) => (oculto ? MASCARA : brlReal(v));
+// Esconde valores "R$ 1.234,56" dentro de um texto já pronto (ex.: mensagens antigas do chat)
+export const mascarar = (t) => (oculto ? String(t ?? "").replace(/R\$[\s ]*-?[\d.]+,\d{2}/g, MASCARA) : t);
+// Números soltos de eixos de gráfico (sem "R$")
+export const eixoValor = (v) => (oculto ? "•••" : v);
 // Cores dos gráficos: entrada = azul escuro, saída = azul claro
 export const cor = { entrada: "#1E3A8A", saida: "#0057FF", investimento: "#8B5CF6" };
 // Versões mais claras, só para textos (leem melhor no fundo escuro)

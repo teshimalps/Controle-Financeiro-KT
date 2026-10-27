@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { collection, doc, onSnapshot, query, setDoc, where } from "firebase/firestore";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { auth, db } from "./firebase";
-import { brl, mesmoItem, paleta, saldoItem } from "./util.js";
+import { brl, estaOculto, mesmoItem, paleta, saldoItem } from "./util.js";
 
 const campo = "w-full rounded-xl border border-borda bg-[#141414] px-3 py-2.5 text-tinta";
 const cartao = "rounded-2xl bg-[#1A1A1A]";
@@ -29,7 +29,9 @@ function Pizza({ fatias, alt = "h-56" }) {
 function CampoValor({ valor, onCommit, ...resto }) {
   const [txt, setTxt] = useState(null);
   return (
-    <input {...resto} type="number" inputMode="decimal" step="0.01" value={txt ?? String(Number(valor.toFixed(2)))}
+    <input {...resto} type={estaOculto() && txt === null ? "text" : "number"} inputMode="decimal" step="0.01"
+      value={estaOculto() && txt === null ? "R$ •••••" : txt ?? String(Number(valor.toFixed(2)))}
+      onFocus={() => { if (txt === null) setTxt(String(Number(valor.toFixed(2)))); }}
       onChange={(e) => { setTxt(e.target.value); const n = Number(e.target.value); if (e.target.value !== "" && !Number.isNaN(n)) onCommit(n); }}
       onBlur={() => setTxt(null)} />
   );

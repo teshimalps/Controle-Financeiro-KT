@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { auth, db } from "./firebase";
-import { brl, hoje, paleta } from "./util.js";
+import { brl, eixoValor, hoje, paleta } from "./util.js";
 
 const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 const NOMES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-const compacto = (v) => new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 }).format(v);
+const compacto = (v) => eixoValor(new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 }).format(v));
 const dois = (n) => String(n).padStart(2, "0");
 
 // Balão do gráfico: mostra de onde veio cada parte do rendimento

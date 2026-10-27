@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { collection, deleteDoc, doc, onSnapshot, orderBy, query, updateDoc, where } from "firebase/firestore";
 import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { auth, db } from "./firebase";
-import { brl, cor, corTexto, hoje, paleta } from "./util.js";
+import { brl, cor, corTexto, eixoValor, hoje, paleta } from "./util.js";
 import MetasResumo from "./MetasResumo.jsx";
 import { diaDoMes } from "./fixos.js";
 import Cofrinhos from "./Cofrinhos.jsx";
@@ -180,7 +180,7 @@ export default function Resumo({ onNova, onMetas, onValor }) {
             <AreaChart data={vista === "acum" ? acum : dias} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <defs><Grad id="gE" c={cor.entrada} /><Grad id="gS" c={cor.saida} /></defs>
               <CartesianGrid stroke="#333" strokeDasharray="3 6" vertical={false} />
-              <XAxis dataKey="dia" {...eixo} /><YAxis width={48} {...eixo} tickFormatter={(v) => (v >= 1000 ? `${v / 1000}k` : v)} />
+              <XAxis dataKey="dia" {...eixo} /><YAxis width={48} {...eixo} tickFormatter={(v) => eixoValor(v >= 1000 ? `${v / 1000}k` : v)} />
               <Tooltip {...dica} />
               <Area className="linha-entrada" type="monotone" dataKey="entrada" name="Entrada" stroke={cor.entrada} strokeWidth={3.5} fill="url(#gE)" />
               <Area className="linha-saida" type="monotone" dataKey="saida" name="Saída" stroke={cor.saida} strokeWidth={3.5} fill="url(#gS)" />

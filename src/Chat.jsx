@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { addDoc, collection, doc, getDocs, limit, onSnapshot, orderBy, query, serverTimestamp, setDoc, where } from "firebase/firestore";
 import { auth, db, modelos } from "./firebase";
-import { brl, corTexto, hoje, nomeTipo, paleta, saldoItem, slug } from "./util.js";
+import { brl, brlReal, corTexto, hoje, mascarar, nomeTipo, paleta, saldoItem, slug } from "./util.js";
 import { lerLocal } from "./lerLocal.js";
 import { atualizarMes } from "./fixos.js";
 
@@ -105,9 +105,9 @@ export default function Chat() {
   useEffect(() => onSnapshot(doc(db, "users", uid, "config", "metasValor"), (s) => { metasRef.current = s.data()?.lista || []; }), [uid]);
   useEffect(() => onSnapshot(collection(db, "users", uid, "categorias"), (s) => { catsRef.current = { ok: true, lista: s.docs.map((d) => d.data()) }; }), [uid]);
 
-  // Histórico salvo na nuvem (últimas 200 mensagens)
+  // Histórico salvo na nuvem: carrega só as últimas 50 mensagens
   useEffect(() => {
-    const q = query(collection(db, "users", uid, "mensagens"), orderBy("ts", "desc"), limit(200));
+    const q = query(collection(db, "users", uid, "mensagens"), orderBy("ts", "desc"), limit(50));
     return onSnapshot(q, (s) => setMsgs(s.docs.map((d) => d.data()).reverse()));
   }, [uid]);
   useEffect(() => { fim.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, busy]);
@@ -185,7 +185,7 @@ export default function Chat() {
             Object.assign(f, { valor, categoria: catF(tipoF), pagamento: tipoF === "saida" ? pagF() : "", dia: dia || f.dia || 1, ativo: true });
             if (!novoF) alterados.push(f);
             fixosMudou = true;
-            respostas.push(`${tipoF === "entrada" ? "Entrada fixa" : "Gasto fixo"} "${f.nome}" de ${brl(valor)} ${novoF ? "criado" : "atualizado"}: entra todo mês, no dia ${f.dia}. Veja e edite na aba Fixos.`);
+            respostas.push(`${tipoF === "entrada" ? "Entrada fixa" : "Gasto fixo"} "${f.nome}" de ${brlReal(valor)} ${novoF ? "criado" : "atualizado"}: entra todo mês, no dia ${f.dia}. Veja e edite na aba Fixos.`);
           } else {
             const f = acharFixo(a.nome);
             if (!f) { respostas.push(`Não achei nenhum fixo chamado "${a.nome}". Veja a lista na aba Fixos.`); continue; }
@@ -198,7 +198,7 @@ export default function Chat() {
             } else if (a.acao === "fixo_alterar") {
               const feitos = [];
               if (String(a.novoNome || "").trim()) { f.nome = String(a.novoNome).trim(); feitos.push("nome"); }
-              if (Number(a.valor) > 0) { f.valor = Number(a.valor); feitos.push(`valor ${brl(f.valor)}`); }
+              if (Number(a.valor) > 0) { f.valor = Number(a.valor); feitos.push(`valor ${brlReal(f.valor)}`); }
               if (catTxt) { f.categoria = catF(f.tipo === "entrada" ? "entrada" : "saida"); feitos.push(`categoria ${f.categoria}`); }
               if (a.pagamento && f.tipo !== "entrada") { f.pagamento = pagF(); feitos.push(`pagamento ${f.pagamento}`); }
               if (dia) { f.dia = dia; feitos.push(`dia ${dia}`); }
@@ -239,7 +239,7 @@ export default function Chat() {
               // resgate nunca passa do que está investido: o saldo não fica negativo
               const donoRendC = Object.fromEntries(cats.filter((x) => x.pai === "Rendimentos").map((x) => [x.nome, x.aporte]));
               const saldoAtual = saldoItem(it, [...invRef.current, ...itens.filter((i) => i.tipo === "investimento")], donoRendC);
-              if (-valor > saldoAtual + 0.005) { respostas.push(`Não registrei o resgate: ${it.nome} tem ${brl(Math.max(saldoAtual, 0))} e você pediu para tirar ${brl(-valor)}.`); continue; }
+              if (-valor > saldoAtual + 0.005) { respostas.push(`Não registrei o resgate: ${it.nome} tem ${brlReal(Math.max(saldoAtual, 0))} e você pediu para tirar ${brlReal(-valor)}.`); continue; }
             }
           } else {
             // entrada/saída: só vale categoria que existe; saída sem categoria vira "Despesa Eventual"
@@ -263,7 +263,7 @@ export default function Chat() {
       // confirma o saldo do investimento depois de aportar, resgatar ou render
       const donoRend = Object.fromEntries(cats.filter((x) => x.pai === "Rendimentos").map((x) => [x.nome, x.aporte]));
       const novosInv = itens.filter((i) => i.tipo === "investimento");
-      carteiraItens.filter((it) => novosInv.some((i) => i.investId === it.id)).forEach((it) => respostas.push(`Saldo do ${it.nome}: ${brl(saldoItem(it, [...invRef.current, ...novosInv], donoRend))}`));
+      carteiraItens.filter((it) => novosInv.some((i) => i.investId === it.id)).forEach((it) => respostas.push(`Saldo do ${it.nome}: ${brlReal(saldoItem(it, [...invRef.current, ...novosInv], donoRend))}`));
       if (fixosMudou) {
         fixosRef.current = fixos;
         gravar.push(setDoc(doc(db, "users", uid, "config", "fixos"), { lista: fixos }, { merge: true }));
@@ -296,7 +296,7 @@ export default function Chat() {
         {todas.map((m, k) => (
           <div key={k} className={m.de === "eu" ? "flex justify-end" : "flex"}>
             <div className={`max-w-[85%] rounded-2xl px-4 py-3 ${m.de === "eu" ? "bg-neon text-white" : "painel3d"}`}>
-              <p>{m.texto}</p>
+              <p>{mascarar(m.texto)}</p>
               {m.criadas?.map((c) => <p key={c} className="mt-2 text-sm font-bold text-neon">Criada: {c}</p>)}
               {m.itens?.map((i, n) => (
                 <p key={n} className="mt-2 text-sm">
