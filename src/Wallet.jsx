@@ -5,6 +5,7 @@ import { auth, db } from "./firebase";
 import { brlOc, estaEscondido, mesmoItem, saldoItem } from "./util.js";
 import { arcaGrupos } from "./carteira.js";
 import Olho, { useOlho } from "./Olho.jsx";
+import BuscaAcoes from "./BuscaAcoes.jsx";
 
 const campo = "w-full rounded-xl border border-borda bg-[#141414] px-3 py-2.5 text-tinta";
 const novoId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
@@ -136,6 +137,7 @@ export default function Wallet() {
     setModal({ gid: g.id, tela: "lista" }); // volta para a lista, já com o novo investimento
   };
   const gm = modal ? lista.find((g) => g.id === modal.gid) : null; // grupo aberto no modal
+  const addTicker = (g, ticker) => atualizar(lista.map((x) => (x.id === g.id ? { ...x, itens: [...(x.itens || []), { id: novoId(), nome: ticker, inicial: 0 }] } : x)));
   const alvo = (g) => PERFIS[perfil].alvo[g.id] ?? 0;
   const dif = (g, k) => { const d = pct(tot[k].saldo, total) - alvo(g); return d === 0 ? "na meta" : d > 0 ? `${d} p.p. acima` : `${-d} p.p. abaixo`; };
   const km = gm ? lista.indexOf(gm) : -1;
@@ -207,7 +209,12 @@ export default function Wallet() {
               </div>
               <button type="button" onClick={fechar} aria-label="Fechar" className="px-2 text-2xl text-suave">×</button>
             </div>
-            {modal.tela === "novo" ? (
+            {modal.tela === "busca" ? (
+              <>
+                <button type="button" onClick={() => setModal({ gid: gm.id, tela: "lista" })} className="text-sm text-suave underline">← Voltar para a lista</button>
+                <BuscaAcoes jaTem={(gm.itens || []).map((i) => i.nome)} onAdd={(tk) => addTicker(gm, tk)} />
+              </>
+            ) : modal.tela === "novo" ? (
               <form onSubmit={(e) => { e.preventDefault(); addItem(gm); }} className="space-y-3">
                 <p className="font-bold">Novo investimento</p>
                 <input autoFocus className={campo} placeholder="Nome (ex.: Cofrinho MP)" value={r.nome} onChange={(e) => campoRasc(gm.id, "nome", e.target.value)} aria-label="Nome do investimento" />
@@ -241,7 +248,10 @@ export default function Wallet() {
                     );
                   })}
                 </ul>
-                <button type="button" onClick={() => setModal({ gid: gm.id, tela: "novo" })} className="btn-vidro w-full">+ Novo investimento</button>
+                <div className="grid gap-2">
+                  <button type="button" onClick={() => setModal({ gid: gm.id, tela: "novo" })} className="btn-vidro w-full">+ Novo investimento</button>
+                  {gm.id === "acoes" && <button type="button" onClick={() => setModal({ gid: gm.id, tela: "busca" })} className="btn-vidro w-full">Buscar ações (busca avançada)</button>}
+                </div>
               </>
             )}
           </div>
