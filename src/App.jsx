@@ -9,7 +9,7 @@ import Categorias from "./Categorias.jsx";
 import MetasMensais from "./MetasMensais.jsx";
 import MetasValor from "./MetasValor.jsx";
 import Fixos from "./Fixos.jsx";
-import Investimentos from "./Investimentos.jsx";
+import Wallet from "./Wallet.jsx";
 import Rendimentos from "./Rendimentos.jsx";
 import { gerarFixos } from "./fixos.js";
 import { sincronizar } from "./carteira.js";
@@ -18,7 +18,7 @@ import Avatar from "./Avatar.jsx";
 
 // [id, nome no computador, nome curto no celular]
 const abas = [
-  ["chat", "Chat", "Chat"], ["resumo", "Resumo", "Resumo"], ["inv", "Investimentos", "Invest."], ["rend", "Rendimentos", "Rend."], ["fixos", "Fixos", "Fixos"], ["mensais", "Metas mensais", "Mensais"], ["metas", "Metas", "Metas"], ["cat", "Categorias", "Categorias"],
+  ["chat", "Chat", "Chat"], ["resumo", "Resumo", "Resumo"], ["inv", "Wallet", "Wallet"], ["rend", "Rendimentos", "Rend."], ["fixos", "Fixos", "Fixos"], ["mensais", "Metas mensais", "Mensais"], ["metas", "Metas", "Metas"], ["cat", "Categorias", "Categorias"],
 ];
 
 // Abas fixas na barra do celular; as outras ficam no menu "Mais"
@@ -58,7 +58,7 @@ export default function App() {
   if (!user) return <Login />;
 
   const nome = perfil.nome || user.displayName || "";
-  const tela = aba === "chat" ? <Chat /> : aba === "resumo" ? <Resumo onNova={() => setAba("cat")} onMetas={() => setAba("mensais")} onValor={() => setAba("metas")} /> : aba === "rend" ? <Rendimentos /> : aba === "inv" ? <Investimentos /> : aba === "fixos" ? <Fixos /> : aba === "mensais" ? <MetasMensais /> : aba === "metas" ? <MetasValor /> : aba === "cat" ? <Categorias /> : <Perfil user={user} perfil={perfil} />;
+  const tela = aba === "chat" ? <Chat /> : aba === "resumo" ? <Resumo onNova={() => setAba("cat")} onMetas={() => setAba("mensais")} onValor={() => setAba("metas")} /> : aba === "rend" ? <Rendimentos /> : aba === "inv" ? <Wallet /> : aba === "fixos" ? <Fixos /> : aba === "mensais" ? <MetasMensais /> : aba === "metas" ? <MetasValor /> : aba === "cat" ? <Categorias /> : <Perfil user={user} perfil={perfil} />;
 
   return (
     <div className="altura-app flex flex-col md:flex-row">

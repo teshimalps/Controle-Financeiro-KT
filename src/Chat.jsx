@@ -4,6 +4,7 @@ import { auth, db, modelos } from "./firebase";
 import { brl, brlReal, corTexto, hoje, nomeTipo, paleta, saldoItem, slug } from "./util.js";
 import { lerLocal } from "./lerLocal.js";
 import { atualizarMes } from "./fixos.js";
+import { arcaGrupos } from "./carteira.js";
 
 // Tenta os modelos em sequência, mas sem esperar parado: se um demorar 7 s, o próximo já começa
 // junto, e vale o primeiro que responder. Lembra qual funcionou por último.
@@ -123,8 +124,8 @@ export default function Chat() {
     salvar({ de: "eu", texto: t }).catch(console.error); // a tela atualiza na hora, sem esperar o servidor
     try {
       const cats = catsRef.current.ok ? [...catsRef.current.lista] : (await getDocs(collection(db, "users", uid, "categorias"))).docs.map((d) => d.data());
-      // investimentos da carteira (aba Investimentos): é neles que aportes, resgates e rendimentos se acumulam
-      const grupos = carteiraRef.current.map((g) => ({ ...g, itens: (g.itens || []).map((i) => ({ ...i })) }));
+      // investimentos da carteira (aba Wallet): é neles que aportes, resgates e rendimentos se acumulam
+      const grupos = arcaGrupos(carteiraRef.current); // cópia da carteira já nos 4 grupos ARCA
       const carteiraItens = grupos.flatMap((g) => g.itens);
       let carteiraMudou = false;
       const acharItem = (txt) => { const n = norm(txt); return n ? carteiraItens.find((i) => norm(i.nome) === n) || carteiraItens.find((i) => norm(i.nome).includes(n) || n.includes(norm(i.nome))) || null : null; };
@@ -141,15 +142,14 @@ export default function Chat() {
       }
       const t1 = performance.now();
       const itens = [], criadas = [], respostas = [], gravar = [];
-      // a carteira é a fonte única dos cofrinhos: o que ainda não está nela é cadastrado no tipo "Cofrinhos"
+      // a carteira é a fonte única dos cofrinhos: o que ainda não está nela é cadastrado em Caixa (Renda Fixa)
       const cadastrar = (nome) => {
-        let g = grupos.find((x) => norm(x.nome) === "cofrinhos");
-        if (!g) { g = { id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, nome: "Cofrinhos", cor: "#8B5CF6", meta: 0, itens: [] }; grupos.push(g); }
+        const g = grupos.find((x) => x.id === "caixa"); // cofrinho novo entra em Caixa (Renda Fixa)
         const novo = { id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, nome, inicial: 0 };
         g.itens.push(novo);
         carteiraItens.push(novo);
         carteiraMudou = true;
-        respostas.push(`Cadastrei "${nome}" na sua carteira de investimentos (tipo Cofrinhos).`);
+        respostas.push(`Cadastrei "${nome}" na sua Wallet (Caixa - Renda Fixa). Se for de outro grupo, mude em Wallet.`);
         return novo;
       };
       const novaCat = (nome, grupo, pai = "", aporte = "") => {

@@ -1,4 +1,4 @@
-// A carteira (aba Investimentos) é a fonte única dos cofrinhos: todo lançamento de investimento
+// A carteira (aba Wallet) é a fonte única dos cofrinhos: todo lançamento de investimento
 // (aporte, resgate, rendimento) pertence a um item dela. Se o item não existe, ele é cadastrado aqui.
 import { doc, setDoc, writeBatch } from "firebase/firestore";
 import { db } from "./firebase";
@@ -6,11 +6,33 @@ import { db } from "./firebase";
 const norm = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 const novoId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
 const clonar = (grupos) => (grupos || []).map((g) => ({ ...g, itens: (g.itens || []).map((i) => ({ ...i })) }));
-const grupoCofrinhos = (grupos) => {
-  let g = grupos.find((x) => norm(x.nome) === "cofrinhos");
-  if (!g) { g = { id: novoId(), nome: "Cofrinhos", cor: "#8B5CF6", meta: 0, itens: [] }; grupos.push(g); }
-  return g;
+// Wallet no método ARCA: quatro grupos fixos. Itens de carteiras antigas (tipos criados à mão) são
+// distribuídos nesses grupos pelo nome, sem perder o id (os lançamentos continuam ligados a eles).
+export const ARCA = [
+  { id: "acoes", letra: "A", nome: "Ações e Negócios", cor: "#00C2FF" },
+  { id: "real-estate", letra: "R", nome: "Real Estate (FII)", cor: "#FBBF24" },
+  { id: "caixa", letra: "C", nome: "Caixa (Renda Fixa)", cor: "#34D399" },
+  { id: "internacional", letra: "A", nome: "Ativos Internacionais", cor: "#8B5CF6" },
+];
+const destinoAntigo = (nome) => {
+  const n = norm(nome);
+  if (/acoes|negocio|bolsa|dividendo/.test(n)) return "acoes";
+  if (/fii|fundo|imobili|real estate|tijolo/.test(n)) return "real-estate";
+  if (/exterior|internacional|global|dolar|stock|reit/.test(n)) return "internacional";
+  return "caixa";
 };
+export const ehArca = (grupos) => Array.isArray(grupos) && grupos.length === ARCA.length && ARCA.every((a, k) => grupos[k]?.id === a.id);
+export function arcaGrupos(grupos) {
+  const saida = ARCA.map((a) => ({ ...a, meta: 0, itens: [] }));
+  const por = Object.fromEntries(saida.map((g) => [g.id, g]));
+  clonar(grupos).forEach((g) => {
+    const alvo = por[g.id] || por[destinoAntigo(g.nome)];
+    alvo.itens.push(...g.itens);
+    if (!alvo.meta && Number(g.meta)) alvo.meta = Number(g.meta);
+  });
+  return saida;
+}
+const grupoCaixa = (grupos) => grupos.find((g) => g.id === "caixa");
 // Acha o item da carteira pelo nome: igual, ou um contido no outro ("MP" e "Cofrinho MP"), como o Chat faz
 const achar = (itens, nome) => {
   const n = norm(nome);
@@ -23,14 +45,14 @@ let rodando = false;
 // Cada nome é importado uma única vez: se você apagar um item da carteira, ele não volta.
 export async function sincronizar(uid, cart, cats) {
   if (rodando) return;
-  const grupos = clonar(cart.grupos);
+  const grupos = arcaGrupos(cart.grupos);
   const importados = new Set(cart.importados || []);
   const existentes = grupos.flatMap((g) => g.itens);
   const marcar = cats.filter((c) => c.grupo === "investimento" && c.pai !== "Rendimentos" && !importados.has(norm(c.nome)));
-  if (!marcar.length) return;
+  if (!marcar.length && ehArca(cart.grupos)) return; // nada a importar e a carteira já está no formato ARCA
   const novos = marcar.filter((c) => !achar(existentes, c.nome));
   if (novos.length) {
-    const g = grupoCofrinhos(grupos);
+    const g = grupoCaixa(grupos); // cofrinho novo entra em Caixa (Renda Fixa)
     novos.forEach((c) => g.itens.push({ id: novoId(), nome: c.nome, inicial: 0 }));
   }
   rodando = true;
@@ -43,7 +65,7 @@ export async function sincronizar(uid, cart, cats) {
 // cadastra o investimento que faltar e liga cada lançamento a ele. Não apaga nem altera valores.
 // `orfaos` vêm com `docId` (id do documento do lançamento). Devolve quantos lançamentos foram ligados.
 export async function vincularOrfaos(uid, cart, orfaos, cats) {
-  const grupos = clonar(cart.grupos);
+  const grupos = arcaGrupos(cart.grupos);
   const dono = Object.fromEntries(cats.filter((c) => c.pai === "Rendimentos").map((c) => [c.nome, c.aporte]));
   const nomeDe = (l) => String((l.rendimento ? dono[l.categoria] || String(l.categoria || "").replace(/^Rendimentos?\s*/i, "") : l.categoria) || "").trim() || "Outros";
   const itens = grupos.flatMap((g) => g.itens);
@@ -51,10 +73,10 @@ export async function vincularOrfaos(uid, cart, orfaos, cats) {
   const ligacoes = orfaos.filter((l) => l.docId).map((l) => {
     const nome = nomeDe(l);
     let it = achar(itens, nome);
-    if (!it) { it = { id: novoId(), nome, inicial: 0 }; grupoCofrinhos(grupos).itens.push(it); itens.push(it); criou = true; }
+    if (!it) { it = { id: novoId(), nome, inicial: 0 }; grupoCaixa(grupos).itens.push(it); itens.push(it); criou = true; }
     return { docId: l.docId, investId: it.id };
   });
-  if (criou) await setDoc(doc(db, "users", uid, "config", "carteira"), { grupos }, { merge: true });
+  if (criou || !ehArca(cart.grupos)) await setDoc(doc(db, "users", uid, "config", "carteira"), { grupos }, { merge: true });
   for (let k = 0; k < ligacoes.length; k += 400) {
     const lote = writeBatch(db);
     ligacoes.slice(k, k + 400).forEach((x) => lote.update(doc(db, "users", uid, "lancamentos", x.docId), { investId: x.investId }));

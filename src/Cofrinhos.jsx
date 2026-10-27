@@ -70,7 +70,7 @@ function Movimento({ it, tipo, uid, cats, metas, saldo, fechar, avisar }) {
   );
 }
 
-// Seção do Resumo: cada investimento da aba Investimentos com saldo, movimento do mês e botões de aportar/resgatar/render
+// Seção do Resumo: cada investimento da aba Wallet com saldo, movimento do mês e botões de aportar/resgatar/render
 export default function Cofrinhos({ uid, itens, cats, metas }) {
   const [oculto, alternar] = useOlho("carteira");
   const [inv, setInv] = useState(null);
@@ -107,12 +107,12 @@ export default function Cofrinhos({ uid, itens, cats, metas }) {
   return (
     <section className="painel3d rounded-2xl p-4">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="font-bold">Investimentos</h2>
+        <h2 className="font-bold">Wallet</h2>
         <Olho oculto={oculto} onClick={alternar} className="h-9 w-9" />
       </div>
       <p className="mb-3 text-sm text-suave">Saldo de cada investimento da sua carteira: o que você aportou, menos o que resgatou, mais o rendimento.</p>
       {msg && <p role="status" className="mb-3 text-sm font-medium text-[#34D399]">{msg}</p>}
-      {!todos.length && <p className="mb-3 text-sm text-suave">Crie seus investimentos na aba Investimentos para aportar e resgatar por aqui.</p>}
+      {!todos.length && <p className="mb-3 text-sm text-suave">Crie seus investimentos na aba Wallet para aportar e resgatar por aqui.</p>}
       <div className="grid gap-3 md:grid-cols-2">
         {todos.map((it) => {
           const saldo = saldoItem(it, inv, donoRend);
