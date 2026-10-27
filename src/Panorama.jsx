@@ -17,8 +17,17 @@ const TICKER = /^[A-Z]{4}\d{1,2}$/;
 
 // Índices (Ibovespa e bolsas do mundo) pelo HG Brasil Finance, com a chave gratuita da própria pessoa
 async function buscarIndices(chave, sinal) {
-  const j = await json(`https://api.hgbrasil.com/finance?key=${encodeURIComponent(chave)}&format=json-cors`, sinal);
-  if (j.valid_key === false) throw new Error("chave inválida");
+  const base = `https://api.hgbrasil.com/finance?key=${encodeURIComponent(chave)}`;
+  let j;
+  try { j = await json(base, sinal); } catch (e1) {
+    if (e1.name === "AbortError") throw e1;
+    try { j = await json(`${base}&format=json-cors`, sinal); } catch (e2) {
+      if (e2.name === "AbortError") throw e2;
+      // "Failed to fetch" = o navegador bloqueou o pedido (domínio da chave, tipo da chave ou bloqueador de anúncios)
+      throw new Error(/^\d+$/.test(e2.message) ? `a HG Brasil respondeu erro ${e2.message}` : "o navegador bloqueou o pedido: confira se a chave é do tipo Uso exposto com o domínio deste site e desative bloqueadores de anúncios para ele");
+    }
+  }
+  if (j.valid_key === false) throw new Error("chave inválida ou domínio não cadastrado na chave");
   return j.results.stocks;
 }
 // Gráfico pequeno de linha com os dias guardados pelo app. Cor pela tendência do período.
