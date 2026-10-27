@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, onSnapshot } from "firebase/firestore";
+import { collection, doc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import Login from "./Login.jsx";
 import Chat from "./Chat.jsx";
@@ -12,6 +12,7 @@ import Fixos from "./Fixos.jsx";
 import Investimentos from "./Investimentos.jsx";
 import Rendimentos from "./Rendimentos.jsx";
 import { gerarFixos } from "./fixos.js";
+import { sincronizar } from "./carteira.js";
 import Perfil from "./Perfil.jsx";
 import Avatar from "./Avatar.jsx";
 
@@ -42,6 +43,15 @@ export default function App() {
     const ver = () => { if (document.visibilityState === "visible") rodar(); };
     document.addEventListener("visibilitychange", ver);
     return () => { off(); document.removeEventListener("visibilitychange", ver); };
+  }, [user]);
+  // Carteira de investimentos: todo cofrinho (categoria de investimento) passa a ter um item nela
+  useEffect(() => {
+    if (!user) return undefined;
+    let cart = null, cats = null;
+    const rodar = () => { if (cart && cats) sincronizar(user.uid, cart, cats); };
+    const a = onSnapshot(doc(db, "users", user.uid, "config", "carteira"), (s) => { cart = s.data() || {}; rodar(); });
+    const b = onSnapshot(collection(db, "users", user.uid, "categorias"), (s) => { cats = s.docs.map((d) => d.data()); rodar(); });
+    return () => { a(); b(); };
   }, [user]);
 
   if (user === undefined) return <p className="p-6 text-suave">Carregando…</p>;

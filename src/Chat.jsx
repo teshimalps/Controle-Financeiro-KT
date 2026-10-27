@@ -124,7 +124,9 @@ export default function Chat() {
     try {
       const cats = catsRef.current.ok ? [...catsRef.current.lista] : (await getDocs(collection(db, "users", uid, "categorias"))).docs.map((d) => d.data());
       // investimentos da carteira (aba Investimentos): é neles que aportes, resgates e rendimentos se acumulam
-      const carteiraItens = carteiraRef.current.flatMap((g) => (g.itens || []).map((i) => ({ ...i })));
+      const grupos = carteiraRef.current.map((g) => ({ ...g, itens: (g.itens || []).map((i) => ({ ...i })) }));
+      const carteiraItens = grupos.flatMap((g) => g.itens);
+      let carteiraMudou = false;
       const acharItem = (txt) => { const n = norm(txt); return n ? carteiraItens.find((i) => norm(i.nome) === n) || carteiraItens.find((i) => norm(i.nome).includes(n) || n.includes(norm(i.nome))) || null : null; };
       const catsLocal = [...cats, ...carteiraItens.filter((i) => !cats.some((c) => norm(c.nome) === norm(i.nome))).map((i) => ({ nome: i.nome, grupo: "investimento", pai: "" }))];
       // 1º tenta entender na hora, sem IA (lançamento simples); se tiver dúvida, pergunta para a IA
@@ -139,6 +141,17 @@ export default function Chat() {
       }
       const t1 = performance.now();
       const itens = [], criadas = [], respostas = [], gravar = [];
+      // a carteira é a fonte única dos cofrinhos: o que ainda não está nela é cadastrado no tipo "Cofrinhos"
+      const cadastrar = (nome) => {
+        let g = grupos.find((x) => norm(x.nome) === "cofrinhos");
+        if (!g) { g = { id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, nome: "Cofrinhos", cor: "#8B5CF6", meta: 0, itens: [] }; grupos.push(g); }
+        const novo = { id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, nome, inicial: 0 };
+        g.itens.push(novo);
+        carteiraItens.push(novo);
+        carteiraMudou = true;
+        respostas.push(`Cadastrei "${nome}" na sua carteira de investimentos (tipo Cofrinhos).`);
+        return novo;
+      };
       const novaCat = (nome, grupo, pai = "", aporte = "") => {
         gravar.push(setDoc(doc(db, "users", uid, "categorias", slug(nome)), { nome, grupo, pai, cor: paleta[cats.length % paleta.length], ...(aporte ? { aporte } : {}) }));
         cats.push({ nome, grupo, pai, ...(aporte ? { aporte } : {}) });
@@ -198,6 +211,7 @@ export default function Chat() {
         } else if (a.acao === "criar_categoria" && a.nome && ["gasto", "entrada", "investimento", "pagamento"].includes(a.grupo)) {
           novaCat(a.nome, a.grupo, a.pai || "");
           criadas.push(a.nome);
+          if (a.grupo === "investimento" && a.pai !== "Rendimentos" && !acharItem(a.nome)) cadastrar(String(a.nome).trim());
         } else if ((nomeTipo[a.tipo] || a.tipo === "rendimento") && Number(a.valor) !== 0 && /^\d{4}-\d{2}-\d{2}$/.test(a.data)) {
           let tipo = a.tipo, valor = Number(a.valor);
           const temInv = !!acharCat(cats, a.categoria, ["investimento"]) || /cofrinho|investiment/.test(tn);
@@ -211,10 +225,22 @@ export default function Chat() {
           let nomeCat, rend = false, investId;
           if (tipo === "rendimento" || tipo === "investimento") {
             rend = tipo === "rendimento";
-            const it = acharItem(a.categoria);
-            nomeCat = it?.nome || "Outros";
-            investId = it?.id;
-            if (!it && ((String(a.categoria || "").trim() && norm(a.categoria) !== "outros") || /cofrinho/.test(tn) || rend)) respostas.push("Não achei esse investimento na sua carteira, então lancei em \"Outros\". Crie na aba Investimentos e edite o lançamento no Resumo.");
+            let it = acharItem(a.categoria);
+            if (!it) {
+              // investimento que ainda não está na carteira: cadastra lá e lança nele (nunca fica solto)
+              const dono = rend ? cats.find((x) => x.pai === "Rendimentos" && norm(x.nome) === norm(a.categoria))?.aporte : "";
+              const base = dono || (rend ? String(a.categoria || "").replace(/^Rendimentos?\s*/i, "") : a.categoria);
+              const nomeNovo = String(base || "").trim() || "Outros";
+              it = acharItem(nomeNovo) || cadastrar(nomeNovo);
+            }
+            nomeCat = it.nome;
+            investId = it.id;
+            if (!rend && valor < 0) {
+              // resgate nunca passa do que está investido: o saldo não fica negativo
+              const donoRendC = Object.fromEntries(cats.filter((x) => x.pai === "Rendimentos").map((x) => [x.nome, x.aporte]));
+              const saldoAtual = saldoItem(it, [...invRef.current, ...itens.filter((i) => i.tipo === "investimento")], donoRendC);
+              if (-valor > saldoAtual + 0.005) { respostas.push(`Não registrei o resgate: ${it.nome} tem ${brl(Math.max(saldoAtual, 0))} e você pediu para tirar ${brl(-valor)}.`); continue; }
+            }
           } else {
             // entrada/saída: só vale categoria que existe; saída sem categoria vira "Despesa Eventual"
             nomeCat = acharCat(cats, a.categoria, ["gasto", "entrada"], true)?.nome;
@@ -242,6 +268,10 @@ export default function Chat() {
         fixosRef.current = fixos;
         gravar.push(setDoc(doc(db, "users", uid, "config", "fixos"), { lista: fixos }, { merge: true }));
         alterados.forEach((f) => gravar.push(atualizarMes(uid, f)));
+      }
+      if (carteiraMudou) {
+        carteiraRef.current = grupos;
+        gravar.push(setDoc(doc(db, "users", uid, "config", "carteira"), { grupos }, { merge: true }));
       }
       if (!itens.length && !criadas.length && !respostas.length) throw new Error("nada");
       gravar.push(salvar({ de: "ia", texto: respostas.join("\n\n") || "Feito:", itens, criadas }));

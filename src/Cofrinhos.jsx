@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import { addDoc, collection, doc, onSnapshot, query, serverTimestamp, where } from "firebase/firestore";
 import { db } from "./firebase";
 import { brl, hoje, mesmoItem, saldoItem } from "./util.js";
+import { vincularOrfaos } from "./carteira.js";
 
 const campo = "w-full rounded-xl border border-borda bg-[#141414] px-3 py-2.5 text-tinta";
 const sinal = (v) => `${v > 0 ? "+" : ""}${brl(v)}`;
 const ROT = { aporte: "Aportar no investimento", resgate: "Resgatar do investimento", rendimento: "Registrar rendimento" };
 
 // Aportar, resgatar ou registrar rendimento direto num investimento da carteira, em qualquer data
-function Movimento({ it, tipo, uid, cats, metas, fechar, avisar }) {
+function Movimento({ it, tipo, uid, cats, metas, saldo, fechar, avisar }) {
   const [f, setF] = useState({ valor: "", data: hoje(), pagamento: "", metaId: "", descricao: "" });
   const [erro, setErro] = useState("");
   const pags = cats.filter((x) => x.grupo === "pagamento").map((x) => x.nome);
@@ -19,6 +20,7 @@ function Movimento({ it, tipo, uid, cats, metas, fechar, avisar }) {
     const v = Number(String(f.valor).replace(",", "."));
     if (tipo === "rendimento" ? !v : !(v > 0) || !f.data) { setErro("Informe um valor e a data."); return; }
     if (!f.data) { setErro("Informe um valor e a data."); return; }
+    if (tipo === "resgate" && v > saldo + 0.005) { setErro(`Você só tem ${brl(Math.max(saldo, 0))} neste investimento.`); return; }
     try {
       const gravar = addDoc(collection(db, "users", uid, "lancamentos"), {
         tipo: "investimento", valor: tipo === "resgate" ? -v : v, data: f.data, categoria: it.nome, investId: it.id, descricao: f.descricao.trim(),
@@ -68,19 +70,27 @@ function Movimento({ it, tipo, uid, cats, metas, fechar, avisar }) {
 
 // Seção do Resumo: cada investimento da aba Investimentos com saldo, movimento do mês e botões de aportar/resgatar/render
 export default function Cofrinhos({ uid, itens, cats, metas }) {
-  const [inv, setInv] = useState([]);
-  const [grupos, setGrupos] = useState([]);
+  const [inv, setInv] = useState(null);
+  const [cart, setCart] = useState(null);
   const [aberto, setAberto] = useState(null); // { id, tipo }
   const [msg, setMsg] = useState("");
-  useEffect(() => onSnapshot(query(collection(db, "users", uid, "lancamentos"), where("tipo", "==", "investimento")), (s) => setInv(s.docs.map((d) => d.data()))), [uid]);
-  useEffect(() => onSnapshot(doc(db, "users", uid, "config", "carteira"), (s) => setGrupos(s.data()?.grupos || [])), [uid]);
+  useEffect(() => onSnapshot(query(collection(db, "users", uid, "lancamentos"), where("tipo", "==", "investimento")), (s) => setInv(s.docs.map((d) => ({ ...d.data(), docId: d.id })))), [uid]);
+  useEffect(() => onSnapshot(doc(db, "users", uid, "config", "carteira"), (s) => setCart(s.data() || {})), [uid]);
 
+  if (!inv || !cart) return null; // espera carregar a carteira e os lançamentos antes de decidir o que mostrar
+  const grupos = cart.grupos || [];
   const todos = grupos.flatMap((g) => (g.itens || []).map((i) => ({ ...i, tipoNome: g.nome, cor: g.cor })));
   const donoRend = Object.fromEntries(cats.filter((c) => c.pai === "Rendimentos").map((c) => [c.nome, c.aporte]));
   const sem = inv.filter((l) => !todos.some((it) => mesmoItem(l, it, donoRend)));
   if (!todos.length && !sem.length) return null;
   const doMes = itens.filter((i) => i.tipo === "investimento");
-  const semSaldo = sem.reduce((s, l) => s + l.valor, 0);
+  async function vincular() {
+    setMsg("");
+    try {
+      const n = await vincularOrfaos(uid, cart, sem, cats);
+      setMsg(`${n} lançamento${n === 1 ? "" : "s"} ligado${n === 1 ? "" : "s"} à carteira.`);
+    } catch (e) { console.error(e); setMsg("Não consegui ligar à carteira. Verifique a internet e tente de novo."); }
+  }
 
   return (
     <section className="painel3d rounded-2xl p-4">
@@ -108,15 +118,15 @@ export default function Cofrinhos({ uid, itens, cats, metas }) {
                     className="rounded-xl border border-borda px-3 py-2 text-sm font-bold" style={ab && aberto.tipo === t ? { background: cor, color: "#fff", borderColor: cor } : {}}>{r}</button>
                 ))}
               </div>
-              {ab && <Movimento it={it} tipo={aberto.tipo} uid={uid} cats={cats} metas={metas} fechar={() => setAberto(null)} avisar={setMsg} />}
+              {ab && <Movimento it={it} tipo={aberto.tipo} uid={uid} cats={cats} metas={metas} saldo={saldo} fechar={() => setAberto(null)} avisar={setMsg} />}
             </div>
           );
         })}
         {sem.length > 0 && (
-          <div className="rounded-2xl bg-[#141414] p-4">
-            <b className="text-suave">Sem investimento da carteira (Outros)</b>
-            <p className="text-2xl font-extrabold tabular-nums">{brl(semSaldo)}</p>
-            <p className="text-xs text-suave">{sem.length} lançamento{sem.length > 1 && "s"} que não estão ligados a nenhum investimento da carteira. Abra o Editar do lançamento na lista abaixo e escolha o investimento.</p>
+          <div className="rounded-2xl bg-[#141414] p-4 md:col-span-2">
+            <b>{sem.length} lançamento{sem.length > 1 && "s"} sem investimento na carteira</b>
+            <p className="mt-1 text-xs text-suave">Eles não estão em nenhum cofrinho, por isso não entram nos saldos acima. Toque abaixo para cadastrar na carteira o que faltar e ligar tudo. Nenhum valor é apagado ou alterado.</p>
+            <button type="button" onClick={vincular} className="mt-3 rounded-xl bg-neon px-4 py-2.5 text-sm font-bold text-white">Ligar à carteira</button>
           </div>
         )}
       </div>

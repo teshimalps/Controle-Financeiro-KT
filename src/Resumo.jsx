@@ -31,7 +31,7 @@ function Linha({ i, uid, cats, metas }) {
     const v0 = Number(String(f.valor).replace(",", ".")), neg = f.tipoUI === "investimento" || f.tipoUI === "rendimento";
     const v = neg ? v0 : Math.abs(v0); // só investimento/rendimento pode ser negativo (resgate)
     if (!v || !f.data) return;
-    await updateDoc(doc(db, "users", uid, "lancamentos", i.id), { descricao: f.descricao, categoria: f.categoria, tipo: f.tipoUI === "rendimento" ? "investimento" : f.tipoUI, rendimento: f.tipoUI === "rendimento", metaId: f.tipoUI === "investimento" ? f.metaId || "" : "", valor: v, pagamento: f.pagamento, data: f.data });
+    await updateDoc(doc(db, "users", uid, "lancamentos", i.id), { descricao: f.descricao, categoria: f.categoria, tipo: f.tipoUI === "rendimento" ? "investimento" : f.tipoUI, rendimento: f.tipoUI === "rendimento", metaId: f.tipoUI === "investimento" ? f.metaId || "" : "", valor: v, pagamento: f.pagamento, data: f.data, ...(neg && f.categoria !== i.categoria ? { investId: "" } : {}) }); // trocou o investimento: religa pelo nome
     setEdit(false);
   }
 
