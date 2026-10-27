@@ -1,3 +1,12 @@
+import { useState } from "react";
+import { estaEscondido, setEscondido } from "./util.js";
+
+// Estado do olho de uma área: [escondido, alternar]. Re-renderiza a tela que usa o hook.
+export function useOlho(area) {
+  const [, forcar] = useState(0);
+  return [estaEscondido(area), () => { setEscondido(area, !estaEscondido(area)); forcar((n) => n + 1); }];
+}
+
 // Botão do olho: fechado = valores escondidos (padrão ao abrir o app), aberto = valores visíveis
 export default function Olho({ oculto, onClick, className = "" }) {
   return (

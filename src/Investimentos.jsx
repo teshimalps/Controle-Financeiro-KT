@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { collection, doc, onSnapshot, query, setDoc, where } from "firebase/firestore";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { auth, db } from "./firebase";
-import { brl, estaOculto, mesmoItem, paleta, saldoItem } from "./util.js";
+import { brlOc, estaEscondido, mesmoItem, paleta, saldoItem } from "./util.js";
+import Olho, { useOlho } from "./Olho.jsx";
 
 const campo = "w-full rounded-xl border border-borda bg-[#141414] px-3 py-2.5 text-tinta";
 const cartao = "rounded-2xl bg-[#1A1A1A]";
 const novoId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+const brl = (v) => brlOc(v, "carteira"); // valores da carteira seguem o olho da Carteira
 const sinal = (v) => `${v > 0 ? "+" : ""}${brl(v)}`;
 const COR_REND = "#8B5CF6";
 
@@ -29,8 +31,8 @@ function Pizza({ fatias, alt = "h-56" }) {
 function CampoValor({ valor, onCommit, ...resto }) {
   const [txt, setTxt] = useState(null);
   return (
-    <input {...resto} type={estaOculto() && txt === null ? "text" : "number"} inputMode="decimal" step="0.01"
-      value={estaOculto() && txt === null ? "R$ •••••" : txt ?? String(Number(valor.toFixed(2)))}
+    <input {...resto} type={estaEscondido("carteira") && txt === null ? "text" : "number"} inputMode="decimal" step="0.01"
+      value={estaEscondido("carteira") && txt === null ? "R$ •••••" : txt ?? String(Number(valor.toFixed(2)))}
       onFocus={() => { if (txt === null) setTxt(String(Number(valor.toFixed(2)))); }}
       onChange={(e) => { setTxt(e.target.value); const n = Number(e.target.value); if (e.target.value !== "" && !Number.isNaN(n)) onCommit(n); }}
       onBlur={() => setTxt(null)} />
@@ -39,6 +41,7 @@ function CampoValor({ valor, onCommit, ...resto }) {
 
 export default function Investimentos() {
   const uid = auth.currentUser.uid;
+  const [oculto, alternar] = useOlho("carteira");
   const [lista, setLista] = useState(null); // tipos (Renda fixa, Ações...), cada um com seus investimentos
   const [movs, setMovs] = useState([]);     // aportes, resgates e rendimentos lançados (todos os meses)
   const [cats, setCats] = useState([]);
@@ -116,7 +119,10 @@ export default function Investimentos() {
           <h1 className="text-2xl font-extrabold">Investimentos</h1>
           <p className="text-sm text-suave">Sua carteira: tipos (Renda fixa, Ações...) e os investimentos de cada um, como seus cofrinhos. O saldo muda sozinho quando você aporta, resgata ou registra rendimento no chat ou no Resumo.</p>
         </div>
-        <span role="status" className="shrink-0 text-sm text-suave">{status}</span>
+        <div className="flex shrink-0 items-center gap-2">
+          <span role="status" className="text-sm text-suave">{status}</span>
+          <Olho oculto={oculto} onClick={alternar} className="h-10 w-10" />
+        </div>
       </div>
 
       <section className="painel3d rounded-2xl p-4">

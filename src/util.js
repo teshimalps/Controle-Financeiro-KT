@@ -1,16 +1,15 @@
-// Modo privacidade: com o olho fechado, todo valor em dinheiro aparece como "R$ •••••".
-// O App liga/desliga isso (começa sempre fechado) e re-renderiza as telas.
-let oculto = true;
-export const setOculto = (v) => { oculto = !!v; };
-export const estaOculto = () => oculto;
+// Modo privacidade por área: Resumo, Carteira (investimentos e cofrinhos) e Rendimentos têm cada uma o seu olho
+// e começam escondidas ao abrir o app (não fica salvo de propósito). Histórico, chat e o resto mostram o valor normal.
+const escondido = { resumo: true, carteira: true, rendimentos: true };
+export const estaEscondido = (area) => !!escondido[area];
+export const setEscondido = (area, v) => { escondido[area] = !!v; };
 export const MASCARA = "R$ •••••";
-// brl: para mostrar na tela (respeita o olho). brlReal: valor de verdade, para texto que será salvo.
+// brlReal e brl: valor de verdade (histórico, chat, listas, texto que será salvo). brlOc: valor de uma área que tem olho.
 export const brlReal = (v) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-export const brl = (v) => (oculto ? MASCARA : brlReal(v));
-// Esconde valores "R$ 1.234,56" dentro de um texto já pronto (ex.: mensagens antigas do chat)
-export const mascarar = (t) => (oculto ? String(t ?? "").replace(/R\$[\s ]*-?[\d.]+,\d{2}/g, MASCARA) : t);
-// Números soltos de eixos de gráfico (sem "R$")
-export const eixoValor = (v) => (oculto ? "•••" : v);
+export const brl = brlReal;
+export const brlOc = (v, area) => (escondido[area] ? MASCARA : brlReal(v));
+// Números soltos de eixos de gráfico (sem "R$") de uma área com olho
+export const eixoValor = (v, area) => (escondido[area] ? "•••" : v);
 // Cores dos gráficos: entrada = azul escuro, saída = azul claro
 export const cor = { entrada: "#1E3A8A", saida: "#0057FF", investimento: "#8B5CF6" };
 // Versões mais claras, só para textos (leem melhor no fundo escuro)

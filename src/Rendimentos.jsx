@@ -2,11 +2,13 @@ import { useEffect, useState } from "react";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { auth, db } from "./firebase";
-import { brl, eixoValor, hoje, paleta } from "./util.js";
+import { brlOc, eixoValor, hoje, paleta } from "./util.js";
+import Olho, { useOlho } from "./Olho.jsx";
 
 const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 const NOMES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-const compacto = (v) => eixoValor(new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 }).format(v));
+const brl = (v) => brlOc(v, "rendimentos"); // valores desta tela seguem o olho dos Rendimentos
+const compacto = (v) => eixoValor(new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 }).format(v), "rendimentos");
 const dois = (n) => String(n).padStart(2, "0");
 
 // Balão do gráfico: mostra de onde veio cada parte do rendimento
@@ -30,6 +32,7 @@ function Dica({ active, payload, label, origens, cores, titulo }) {
 
 export default function Rendimentos() {
   const uid = auth.currentUser.uid;
+  const [oculto, alternar] = useOlho("rendimentos");
   const [lanc, setLanc] = useState([]);
   const [cats, setCats] = useState([]);
   const [modo, setModo] = useState("mes"); // dia | mes | ano
@@ -79,9 +82,12 @@ export default function Rendimentos() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-3 p-4 md:p-8">
-      <div>
-        <h1 className="text-2xl font-extrabold">Rendimentos</h1>
-        <p className="text-sm text-suave">Veja quanto seus investimentos renderam, dia a dia, mês a mês ou ano a ano. Cada coluna mostra de onde veio o rendimento.</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-extrabold">Rendimentos</h1>
+          <p className="text-sm text-suave">Veja quanto seus investimentos renderam, dia a dia, mês a mês ou ano a ano. Cada coluna mostra de onde veio o rendimento.</p>
+        </div>
+        <Olho oculto={oculto} onClick={alternar} className="h-10 w-10 shrink-0" />
       </div>
 
       <div className="grid grid-cols-3 gap-2 rounded-2xl bg-[#141414] p-1">

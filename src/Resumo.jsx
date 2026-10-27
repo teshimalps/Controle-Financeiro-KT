@@ -2,13 +2,15 @@ import { useEffect, useState } from "react";
 import { collection, deleteDoc, doc, onSnapshot, orderBy, query, updateDoc, where } from "firebase/firestore";
 import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { auth, db } from "./firebase";
-import { brl, cor, corTexto, eixoValor, hoje, paleta } from "./util.js";
+import { brl, brlOc, cor, corTexto, eixoValor, hoje, paleta } from "./util.js";
+import Olho, { useOlho } from "./Olho.jsx";
 import MetasResumo from "./MetasResumo.jsx";
 import { diaDoMes } from "./fixos.js";
 import Cofrinhos from "./Cofrinhos.jsx";
 import Filtro, { filtrar, filtroVazio } from "./Filtro.jsx";
 
 const dica = { contentStyle: { background: "#1A1A1A", border: "1px solid #333", borderRadius: 12 }, formatter: (v) => brl(v) };
+const dicaResumo = { ...dica, formatter: (v) => brlOc(v, "resumo") }; // gráfico de entrada/saída: segue o olho do Resumo
 const eixo = { tick: { fill: "#9A9A9A", fontSize: 12 }, axisLine: false, tickLine: false };
 const painel = "painel3d rounded-2xl p-4";
 const campo = "rounded-lg border border-borda bg-[#141414] px-2 py-1.5 text-sm text-tinta";
@@ -87,6 +89,7 @@ function LinhaPrevista({ i }) {
 export default function Resumo({ onNova, onMetas, onValor }) {
   const uid = auth.currentUser.uid;
   const [mes, setMes] = useState(hoje().slice(0, 7));
+  const [oculto, alternar] = useOlho("resumo");
   const [itensBase, setItens] = useState([]);
   const [filtro, setFiltro] = useState(filtroVazio);
   const [cats, setCats] = useState([]);
@@ -142,7 +145,7 @@ export default function Resumo({ onNova, onMetas, onValor }) {
   const Numero = ({ rotulo, valor, c, extra }) => (
     <div className={painel} style={{ borderTop: `2px solid ${c}`, boxShadow: `0 -6px 24px -10px ${c}` }}>
       <p className="text-sm text-suave">{rotulo}</p>
-      <p className="text-2xl font-extrabold tabular-nums" style={{ color: c }}>{brl(valor)}</p>
+      <p className="text-2xl font-extrabold tabular-nums" style={{ color: c }}>{brlOc(valor, "resumo")}</p>
       {extra && <div className="mt-1 flex flex-wrap gap-x-2 text-xs font-bold">{extra}</div>}
     </div>
   );
@@ -158,11 +161,12 @@ export default function Resumo({ onNova, onMetas, onValor }) {
         <button onClick={() => mover(-1)} aria-label="Mês anterior" className="btn-vidro">‹</button>
         <span className="min-w-44 text-center text-lg font-extrabold capitalize">{rotulo}</span>
         <button onClick={() => mover(1)} aria-label="Próximo mês" className="btn-vidro">›</button>
+        <Olho oculto={oculto} onClick={alternar} className="ml-auto h-10 w-10" />
       </div>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Numero rotulo="Entrou" valor={entrou} c={corTexto.entrada} />
         <Numero rotulo="Saiu" valor={saiu} c={corTexto.saida} />
-        <Numero rotulo="Investido" valor={investiu} c={corTexto.investimento} extra={(porMeta.length > 0 || rendeu !== 0) && (<>{porMeta.map((v) => <span key={v.id} style={{ color: v.cor }}>({brl(v.mes)} {v.nome})</span>)}{rendeu !== 0 && <span className="w-full text-suave">Rendimentos do mês: <b style={{ color: corTexto.investimento }}>{rendeu > 0 ? "+" : ""}{brl(rendeu)}</b></span>}</>)} />
+        <Numero rotulo="Investido" valor={investiu} c={corTexto.investimento} extra={(porMeta.length > 0 || rendeu !== 0) && (<>{porMeta.map((v) => <span key={v.id} style={{ color: v.cor }}>({brlOc(v.mes, "resumo")} {v.nome})</span>)}{rendeu !== 0 && <span className="w-full text-suave">Rendimentos do mês: <b style={{ color: corTexto.investimento }}>{rendeu > 0 ? "+" : ""}{brlOc(rendeu, "resumo")}</b></span>}</>)} />
         <Numero rotulo="Saldo do mês" valor={entrou - saiu} c="#F2F2F2" />
       </div>
       <div className="grid gap-3 lg:grid-cols-3">
@@ -180,8 +184,8 @@ export default function Resumo({ onNova, onMetas, onValor }) {
             <AreaChart data={vista === "acum" ? acum : dias} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <defs><Grad id="gE" c={cor.entrada} /><Grad id="gS" c={cor.saida} /></defs>
               <CartesianGrid stroke="#333" strokeDasharray="3 6" vertical={false} />
-              <XAxis dataKey="dia" {...eixo} /><YAxis width={48} {...eixo} tickFormatter={(v) => eixoValor(v >= 1000 ? `${v / 1000}k` : v)} />
-              <Tooltip {...dica} />
+              <XAxis dataKey="dia" {...eixo} /><YAxis width={48} {...eixo} tickFormatter={(v) => eixoValor(v >= 1000 ? `${v / 1000}k` : v, "resumo")} />
+              <Tooltip {...dicaResumo} />
               <Area className="linha-entrada" type="monotone" dataKey="entrada" name="Entrada" stroke={cor.entrada} strokeWidth={3.5} fill="url(#gE)" />
               <Area className="linha-saida" type="monotone" dataKey="saida" name="Saída" stroke={cor.saida} strokeWidth={3.5} fill="url(#gS)" />
             </AreaChart>

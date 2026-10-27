@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { addDoc, collection, doc, getDocs, limit, onSnapshot, orderBy, query, serverTimestamp, setDoc, where } from "firebase/firestore";
 import { auth, db, modelos } from "./firebase";
-import { brl, brlReal, corTexto, hoje, mascarar, nomeTipo, paleta, saldoItem, slug } from "./util.js";
+import { brl, brlReal, corTexto, hoje, nomeTipo, paleta, saldoItem, slug } from "./util.js";
 import { lerLocal } from "./lerLocal.js";
 import { atualizarMes } from "./fixos.js";
 
@@ -296,7 +296,7 @@ export default function Chat() {
         {todas.map((m, k) => (
           <div key={k} className={m.de === "eu" ? "flex justify-end" : "flex"}>
             <div className={`max-w-[85%] rounded-2xl px-4 py-3 ${m.de === "eu" ? "bg-neon text-white" : "painel3d"}`}>
-              <p>{mascarar(m.texto)}</p>
+              <p>{m.texto}</p>
               {m.criadas?.map((c) => <p key={c} className="mt-2 text-sm font-bold text-neon">Criada: {c}</p>)}
               {m.itens?.map((i, n) => (
                 <p key={n} className="mt-2 text-sm">
