@@ -6,6 +6,7 @@ import { arcaGrupos } from "./carteira.js";
 import Olho, { useOlho } from "./Olho.jsx";
 import Mercado, { Seta } from "./Mercado.jsx";
 import useMercado from "./useMercado.js";
+import Panorama from "./Panorama.jsx";
 import { achaTicker, corVar, fmtPreco, fmtVar } from "./mercado.js";
 
 const campo = "w-full rounded-xl border border-borda bg-[#141414] px-3 py-2.5 text-tinta";
@@ -198,6 +199,8 @@ export default function Wallet() {
           </button>
         ))}
       </div>
+
+      <Panorama token={mercado.token} />
 
       {gm && (
         <div className="anim-fundo fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center sm:p-6" onMouseDown={(e) => { if (e.target === e.currentTarget) fechar(); }}>
