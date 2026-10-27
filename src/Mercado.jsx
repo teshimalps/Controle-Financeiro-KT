@@ -112,8 +112,8 @@ export default function Mercado({ mercado, jaTem, onAdd }) {
         {filtrada.slice(0, limite).map((a) => (
           <li key={a.ticker} className="flex flex-wrap items-center gap-3 py-2.5">
             <div className="min-w-0 flex-1">
-              <b className="tracking-wide">{a.ticker}</b>
-              <p className="truncate text-xs text-suave">{a.nome}</p>
+              <p className="font-semibold leading-tight">{a.nome}</p>
+              <p className="text-xs tracking-wide text-suave">{a.ticker}</p>
             </div>
             <div className="text-right tabular-nums">
               <p className="font-semibold">{fmtPreco(a.preco)}</p>
@@ -121,7 +121,7 @@ export default function Mercado({ mercado, jaTem, onAdd }) {
             </div>
             <button type="button" disabled={tem(a.ticker)} onClick={() => { setComprando(comprando === a.ticker ? null : a.ticker); setQtd(""); setPago(String(a.preco)); }} className="shrink-0 rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold disabled:opacity-40">{tem(a.ticker) ? "Na carteira" : "+ Carteira"}</button>
             {comprando === a.ticker && (
-              <form className="basis-full space-y-2 pt-2" onSubmit={(e) => { e.preventDefault(); if (Number(qtd) > 0 && Number(pago) > 0) { onAdd(a.ticker, Number(qtd), Number(pago)); setComprando(null); } }}>
+              <form className="basis-full space-y-2 pt-2" onSubmit={(e) => { e.preventDefault(); if (Number(qtd) > 0 && Number(pago) > 0) { onAdd(a.ticker, Number(qtd), Number(pago), a.nome); setComprando(null); } }}>
                 <div className="grid grid-cols-2 gap-2">
                   <Campo rotulo="Quantidade comprada" valor={qtd} onChange={setQtd} step="any" min="0" autoFocus />
                   <Campo rotulo="Preço pago (por ação)" valor={pago} onChange={setPago} step="0.01" min="0" />

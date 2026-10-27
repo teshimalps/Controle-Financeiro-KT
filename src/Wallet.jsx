@@ -6,7 +6,7 @@ import { arcaGrupos } from "./carteira.js";
 import Olho, { useOlho } from "./Olho.jsx";
 import Mercado, { Seta } from "./Mercado.jsx";
 import useMercado from "./useMercado.js";
-import { achaTicker, corVar, fmtVar } from "./mercado.js";
+import { achaTicker, corVar, fmtPreco, fmtVar } from "./mercado.js";
 
 const campo = "w-full rounded-xl border border-borda bg-[#141414] px-3 py-2.5 text-tinta";
 const novoId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
@@ -118,7 +118,7 @@ export default function Wallet() {
     setModal({ gid: g.id, tela: "lista" }); // volta para a lista, já com o novo investimento
   };
   const gm = modal ? lista.find((g) => g.id === modal.gid) : null; // grupo aberto no modal
-  const addTicker = (g, ticker, qtd = 0, pm = 0) => atualizar(lista.map((x) => (x.id === g.id ? { ...x, itens: [...(x.itens || []), { id: novoId(), nome: ticker, inicial: Number((qtd * pm).toFixed(2)), ...(qtd > 0 && pm > 0 ? { qtd, pm } : {}) }] } : x)));
+  const addTicker = (g, ticker, qtd = 0, pm = 0, empresa = "") => atualizar(lista.map((x) => (x.id === g.id ? { ...x, itens: [...(x.itens || []), { id: novoId(), nome: empresa ? `${ticker} · ${empresa}` : ticker, inicial: Number((qtd * pm).toFixed(2)), ...(qtd > 0 && pm > 0 ? { qtd, pm } : {}) }] } : x)));
   // quantidade e preço pago: o saldo investido passa a ser quantidade × preço pago
   const mudarPos = (gid, it, patch, mov) => {
     const n = { ...it, ...patch };
@@ -142,7 +142,7 @@ export default function Wallet() {
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-suave">Método ARCA</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight md:text-4xl">Wallet</h1>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight md:text-3xl">Wallet</h1>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <span role="status" className="text-sm text-suave">{status}</span>
@@ -154,7 +154,7 @@ export default function Wallet() {
         <div className="flex flex-wrap items-end justify-between gap-6">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-suave">Patrimônio investido</p>
-            <p className="mt-2 text-5xl font-semibold tracking-tight tabular-nums md:text-6xl">{brl(total)}</p>
+            <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums md:text-4xl">{brl(total)}</p>
             <p className="mt-2 text-sm tabular-nums text-suave">Rendimento acumulado <b className="ml-1 font-semibold" style={{ color: COR_REND }}>{sinal(totalRend)}</b></p>
           </div>
           <div className="w-full sm:w-auto" role="radiogroup" aria-label="Perfil do investidor">
@@ -180,14 +180,14 @@ export default function Wallet() {
       <div className="grid flex-1 auto-rows-fr gap-4 md:grid-cols-2">
         {lista.map((g, k) => (
           <button key={g.id} type="button" onClick={() => setModal({ gid: g.id, tela: "lista" })} aria-label={`Abrir ${g.nome}`}
-            className="group relative flex min-h-48 flex-col justify-between overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] p-6 text-left transition duration-300 hover:-translate-y-0.5 hover:border-white/25 hover:bg-white/[0.06] md:p-8">
+            className="group relative flex min-h-40 flex-col justify-between overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] p-6 text-left transition duration-300 hover:-translate-y-0.5 hover:border-white/25 hover:bg-white/[0.06] md:p-8">
             <span className="absolute inset-x-0 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${g.cor}, transparent)` }} aria-hidden="true" />
             <div className="flex items-start justify-between gap-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-suave"><span className="mr-2 inline-block h-2 w-2 rounded-full align-middle" style={{ background: g.cor }} />{g.nome}</p>
               <span className="text-suave transition group-hover:translate-x-0.5 group-hover:text-tinta" aria-hidden="true">→</span>
             </div>
             <div>
-              <p className="text-4xl font-semibold tracking-tight tabular-nums md:text-5xl">{brl(tot[k].saldo)}</p>
+              <p className="text-2xl font-semibold tracking-tight tabular-nums md:text-3xl">{brl(tot[k].saldo)}</p>
               <p className="mt-2 text-sm tabular-nums text-suave"><b className="text-tinta">{pct(tot[k].saldo, total)}%</b> da carteira · meta {alvo(g)}%{total > 0 && <> · {dif(g, k)}</>}</p>
               <div className="relative mt-4 h-1 rounded-full bg-white/10">
                 <div className="h-full rounded-full" style={{ width: `${pct(tot[k].saldo, total)}%`, background: g.cor }} />
@@ -206,7 +206,7 @@ export default function Wallet() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-suave"><span className="mr-2 inline-block h-2 w-2 rounded-full align-middle" style={{ background: gm.cor }} />{gm.nome}</p>
-                <p className="mt-2 text-4xl font-semibold tracking-tight tabular-nums">{brl(tot[km].saldo)}</p>
+                <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums">{brl(tot[km].saldo)}</p>
                 <p className="mt-1 text-sm tabular-nums text-suave">{pct(tot[km].saldo, total)}% da carteira · meta {alvo(gm)}% · {tot[km].n} investimento{tot[km].n !== 1 && "s"}</p>
               </div>
               <button type="button" onClick={fechar} aria-label="Fechar" className="-mr-2 -mt-2 px-3 py-1 text-3xl leading-none text-suave hover:text-tinta">×</button>
@@ -216,12 +216,14 @@ export default function Wallet() {
               <div className="space-y-3">
                 <button type="button" onClick={() => setModal({ gid: gm.id, tela: "lista" })} className="text-sm text-suave underline">← Minha posição</button>
                 <p className="text-lg font-semibold">Ações da bolsa</p>
-                <Mercado mercado={mercado} jaTem={(gm.itens || []).map((i) => achaTicker(i.nome)).filter(Boolean)} onAdd={(tk, q, pm) => addTicker(gm, tk, q, pm)} />
+                <Mercado mercado={mercado} jaTem={(gm.itens || []).map((i) => achaTicker(i.nome)).filter(Boolean)} onAdd={(tk, q, pm, emp) => addTicker(gm, tk, q, pm, emp)} />
               </div>
             ) : modal.tela === "novo" ? (
               <form onSubmit={(e) => { e.preventDefault(); addItem(gm); }} className="space-y-3">
                 <p className="text-lg font-semibold">Novo investimento</p>
-                <input autoFocus className={campo} placeholder={gm.id === "acoes" ? "Nome ou código (ex.: WEGE3)" : "Nome (ex.: Cofrinho MP)"} value={r.nome} onChange={(e) => campoRasc(gm.id, "nome", e.target.value)} aria-label="Nome do investimento" />
+                <input autoFocus className={campo} list={gm.id === "acoes" ? "lista-acoes" : undefined} placeholder={gm.id === "acoes" ? "Digite o nome da empresa ou o código" : "Nome (ex.: Cofrinho MP)"} value={r.nome} onChange={(e) => campoRasc(gm.id, "nome", e.target.value)} aria-label="Nome do investimento" />
+                {gm.id === "acoes" && <datalist id="lista-acoes">{(mercado.lista || []).map((a) => <option key={a.ticker} value={`${a.ticker} · ${a.nome}`} />)}</datalist>}
+                {gm.id === "acoes" && !mercado.token && <p className="text-xs text-suave">Para listar as empresas da bolsa ao digitar, ligue as cotações em “Ver mais ações”.</p>}
                 <input className={campo} type="number" inputMode="decimal" min="0" step="0.01" placeholder="Saldo atual (opcional)" value={r.valor} onChange={(e) => campoRasc(gm.id, "valor", e.target.value)} aria-label="Saldo atual" />
                 <div className="flex items-center gap-4">
                   <button className="rounded-xl bg-white px-6 py-2.5 font-semibold text-black">Adicionar</button>
@@ -256,6 +258,7 @@ export default function Wallet() {
                           <CampoValor className={campo} valor={saldo} onCommit={(n) => mudarI(gm.id, it.id, { inicial: Number((n - mov).toFixed(2)) })} aria-label={`Saldo de ${it.nome}`} />
                           <button type="button" onClick={() => remover(gm, it)} aria-label={`Remover ${it.nome}`} className="px-2 text-xl text-suave hover:text-tinta">×</button>
                         </div>
+                        {c && !it.nome.includes(c.nome) && <p className="truncate text-xs text-suave">{c.nome} · {fmtPreco(c.preco)}</p>}
                         {gm.id === "acoes" && (
                           <div className="grid grid-cols-2 gap-2">
                             <label className="block space-y-1"><span className="text-[11px] uppercase tracking-wider text-suave">Quantidade</span>
