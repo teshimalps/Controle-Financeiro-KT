@@ -25,14 +25,13 @@ async function quoteComSerie(simbolo, token, sinal, historico = true) {
   cacheQuote.set(chave, { t: Date.now(), r });
   return r;
 }
-// Ibovespa: tenta o índice; se a fonte não entregar, usa o BOVA11 (ETF que replica o índice) só para variação e gráfico
-async function buscarIbov(token, sinal) {
-  let ultimo = null;
-  for (const [simbolo, historico, pontos] of [["^BVSP", true, true], ["^BVSP", false, true], ["BOVA11", true, false], ["BOVA11", false, false]]) {
-    try { return { ...(await quoteComSerie(simbolo, token, sinal, historico)), pontos }; } catch (e) { ultimo = e; }
-  }
-  throw new Error(ultimo?.message === "401" ? "401: o plano gratuito da brapi não libera o índice" : ultimo?.message || "sem resposta");
+// Índices (Ibovespa e bolsas do mundo) pelo HG Brasil Finance, com a chave gratuita da própria pessoa
+async function buscarIndices(chave, sinal) {
+  const j = await json(`https://api.hgbrasil.com/finance?key=${encodeURIComponent(chave)}&format=json-cors`, sinal);
+  if (j.valid_key === false) throw new Error("chave inválida");
+  return j.results.stocks;
 }
+let historicoBloqueado = false; // a brapi grátis só libera histórico de poucas ações; ao levar 401 paramos de insistir
 
 // Gráfico pequeno de linha (últimos 30 dias). Cor pela tendência do período.
 function Mini({ serie, largura = 72, altura = 28 }) {
@@ -51,28 +50,28 @@ function Mini({ serie, largura = 72, altura = 28 }) {
 function MiniAcao({ ticker, token }) {
   const [serie, setSerie] = useState(null);
   useEffect(() => {
-    if (!token) return undefined;
+    if (!token || historicoBloqueado) return undefined;
     const c = new AbortController();
-    quoteComSerie(ticker, token, c.signal).then((r) => setSerie(r.serie), () => {});
+    quoteComSerie(ticker, token, c.signal).then((r) => setSerie(r.serie), (e) => { if (e.message === "401") historicoBloqueado = true; });
     return () => c.abort();
   }, [ticker, token]);
   return <Mini serie={serie} />;
 }
 
-async function carregarTudo(token, sinal) {
+async function carregarTudo(token, hgKey, sinal) {
   const ano = new Date().getFullYear();
   const pega = (p) => p.then((v) => v, () => null); // cada bloco falha sozinho
-  const [selic, ipca12, selicA, selicB, ipcaA, ipcaB, moedas, ibov, ranking] = await Promise.all([
+  const [selic, ipca12, selicA, selicB, ipcaA, ipcaB, moedas, indices, ranking] = await Promise.all([
     pega(sgs(432, sinal)), pega(sgs(13522, sinal)),
     pega(focus("Selic", ano, sinal)), pega(focus("Selic", ano + 1, sinal)),
     pega(focus("IPCA", ano, sinal)), pega(focus("IPCA", ano + 1, sinal)),
     pega(json("https://economia.awesomeapi.com.br/json/last/USD-BRL,EUR-BRL,BTC-BRL,ETH-BRL", sinal)),
-    token ? buscarIbov(token, sinal).then((v) => v, (e) => ({ erro: e.message || "indisponível" })) : Promise.resolve(null),
+    hgKey ? buscarIndices(hgKey, sinal).then((v) => v, (e) => ({ erro: e.message || "indisponível" })) : Promise.resolve(null),
     token ? pega(json(`https://brapi.dev/api/quote/list?type=stock&limit=100&sortBy=volume&sortOrder=desc&token=${encodeURIComponent(token)}`, sinal).then((j) => (j.stocks || [])
       .filter((s) => TICKER.test(s.stock || "") && Number.isFinite(Number(s.change)))
       .map((s) => ({ ticker: s.stock, nome: s.name || s.stock, preco: Number(s.close), variacao: Number(s.change) })))) : Promise.resolve(null),
   ]);
-  return { t: Date.now(), ano, selic, ipca12, selicA, selicB, ipcaA, ipcaB, moedas, ibov, ranking };
+  return { t: Date.now(), ano, selic, ipca12, selicA, selicB, ipcaA, ipcaB, moedas, indices, ranking };
 }
 
 // Número que "sobe" de zero até o valor quando os dados chegam
@@ -139,15 +138,16 @@ const Rank = ({ lista, token }) => (
 );
 
 // Resumo do Brasil e do mundo: bolsa, juros, inflação, câmbio e criptomoedas
-export default function Panorama({ token }) {
+export default function Panorama({ token, hgKey, salvarHg }) {
   const [d, setD] = useState(null);
   const [carregando, setCarregando] = useState(false);
+  const [chaveTxt, setChaveTxt] = useState("");
 
   const atualizar = useCallback((sinal) => {
-    if (token === null) return undefined;
+    if (token === null || hgKey === null) return undefined;
     setCarregando(true);
-    return carregarTudo(token, sinal).then((r) => { if (!sinal?.aborted) setD(r); }).finally(() => { if (!sinal?.aborted) setCarregando(false); });
-  }, [token]);
+    return carregarTudo(token, hgKey, sinal).then((r) => { if (!sinal?.aborted) setD(r); }).finally(() => { if (!sinal?.aborted) setCarregando(false); });
+  }, [token, hgKey]);
   useEffect(() => { const c = new AbortController(); atualizar(c.signal); return () => c.abort(); }, [atualizar]);
 
   const m = d?.moedas;
@@ -189,17 +189,24 @@ export default function Panorama({ token }) {
               </div>
             </div>
             <div className="space-y-3 border-t border-white/10 pt-4">
-              <p className="text-sm font-semibold">Bolsa brasileira</p>
-              {token === "" ? <p className="text-sm text-suave">Cole o token da brapi em “Ver mais ações” (grupo Ações) para ver o Ibovespa e os rankings.</p> : !d.ibov || d.ibov.erro ? (
-                <p className="text-sm text-suave">Ibovespa indisponível agora{d.ibov?.erro ? ` (${d.ibov.erro})` : ""}.</p>
-              ) : (
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-sm text-suave">{d.ibov.pontos ? "Ibovespa" : "Ibovespa (via BOVA11, só a variação)"}</p>
-                    {d.ibov.pontos && <p className="text-2xl font-semibold tabular-nums"><Contador valor={d.ibov.preco} formato={(v) => Math.round(v).toLocaleString("pt-BR")} /> <span className="text-xs text-suave">pontos</span></p>}
+              <p className="text-sm font-semibold">Bolsas</p>
+              {!hgKey ? (
+                <form className="space-y-2" onSubmit={(e) => { e.preventDefault(); if (chaveTxt.trim()) salvarHg(chaveTxt); }}>
+                  <p className="text-sm text-suave">Para ver o Ibovespa (pontos) e as bolsas do mundo, crie uma chave gratuita em <b>hgbrasil.com/finance</b> e cole aqui. Fica salva só na sua conta.</p>
+                  <div className="flex gap-2">
+                    <input className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-tinta" placeholder="Chave do HG Brasil" value={chaveTxt} onChange={(e) => setChaveTxt(e.target.value)} aria-label="Chave do HG Brasil" autoComplete="off" />
+                    <button className="shrink-0 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-black">Salvar</button>
                   </div>
-                  <Mini serie={d.ibov.serie} largura={120} altura={40} />
-                  <span className="shrink-0 text-lg font-semibold tabular-nums" style={{ color: corVar(d.ibov.variacao) }}><Seta v={d.ibov.variacao} /> {fmtVar(d.ibov.variacao)}</span>
+                </form>
+              ) : !d.indices || d.indices.erro ? (
+                <p className="text-sm text-suave">Bolsas indisponíveis agora{d.indices?.erro ? ` (${d.indices.erro})` : ""}.</p>
+              ) : (
+                <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
+                  {[["IBOVESPA", "Ibovespa"], ["NASDAQ", "Nasdaq (EUA)"], ["DOWJONES", "Dow Jones (EUA)"], ["CAC", "CAC 40 (França)"], ["NIKKEI", "Nikkei 225 (Japão)"], ["IFIX", "IFIX (FIIs)"]].map(([k, nome]) => {
+                    const x = d.indices[k];
+                    const v = Number(x?.variation), pts = Number(x?.points);
+                    return x ? <Linha key={k} rotulo={nome} valor={<>{Number.isFinite(pts) ? <Contador valor={pts} formato={(n) => Math.round(n).toLocaleString("pt-BR")} /> : "—"} <span className="text-xs" style={{ color: corVar(v) }}><Seta v={v} /> {fmtVar(v)}</span></>} /> : null;
+                  })}
                 </div>
               )}
             </div>
@@ -212,7 +219,7 @@ export default function Panorama({ token }) {
           )}
         </div>
       )}
-      <p className="text-[11px] text-suave">Fontes: Banco Central do Brasil (Selic, IPCA e Boletim Focus), AwesomeAPI (câmbio e cripto) e brapi (bolsa). Ranking entre as 100 ações mais negociadas; gráficos dos últimos 30 dias. Informativo, não é recomendação de investimento.</p>
+      <p className="text-[11px] text-suave">Fontes: Banco Central do Brasil (Selic, IPCA e Boletim Focus), AwesomeAPI (câmbio e cripto), HG Brasil (índices das bolsas) e brapi (ações). Ranking entre as 100 ações mais negociadas; gráficos dos últimos 30 dias. Informativo, não é recomendação de investimento.</p>
     </div>
   );
 }
