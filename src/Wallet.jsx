@@ -11,6 +11,12 @@ const novoId = () => `${Date.now().toString(36)}${Math.random().toString(36).sli
 const brl = (v) => brlOc(v, "carteira"); // valores da Wallet seguem o olho da Carteira
 const sinal = (v) => `${v > 0 ? "+" : ""}${brl(v)}`;
 const COR_REND = "#8B5CF6";
+// Perfil do investidor: % ideal de cada grupo ARCA (acoes, real-estate, caixa, internacional), sempre somando 100
+const PERFIS = {
+  conservador: { nome: "Conservador", info: "Mais Caixa, risco baixo", alvo: { acoes: 10, "real-estate": 15, caixa: 65, internacional: 10 } },
+  moderado: { nome: "Moderado", info: "Diversificado entre os 4 grupos", alvo: { acoes: 30, "real-estate": 25, caixa: 30, internacional: 15 } },
+  arrojado: { nome: "Arrojado", info: "Mais risco em Ações, FIIs e Internacional", alvo: { acoes: 40, "real-estate": 25, caixa: 10, internacional: 25 } },
+};
 const pct = (v, t) => (t > 0 && v > 0 ? Math.round((v / t) * 100) : 0);
 
 function Pizza({ fatias }) {
@@ -53,12 +59,20 @@ export default function Wallet() {
   const [lista, setLista] = useState(null); // os 4 grupos ARCA, cada um com seus investimentos
   const [movs, setMovs] = useState([]);     // aportes, resgates e rendimentos lançados (todos os meses)
   const [cats, setCats] = useState([]);
+  const [perfil, setPerfil] = useState("moderado");
   const [modal, setModal] = useState(null); // { gid, tela: "lista" | "novo" } ou null
   const [rasc, setRasc] = useState({});
   const [status, setStatus] = useState("");
   const pendente = useRef(null), timer = useRef(null);
 
-  useEffect(() => onSnapshot(doc(db, "users", uid, "config", "carteira"), (s) => setLista((d) => d ?? arcaGrupos(s.data()?.grupos))), [uid]);
+  useEffect(() => onSnapshot(doc(db, "users", uid, "config", "carteira"), (s) => {
+    setLista((d) => d ?? arcaGrupos(s.data()?.grupos));
+    if (PERFIS[s.data()?.perfil]) setPerfil(s.data().perfil);
+  }), [uid]);
+  const escolherPerfil = (k) => {
+    setPerfil(k);
+    setDoc(doc(db, "users", uid, "config", "carteira"), { perfil: k }, { merge: true }).catch(() => setStatus("Não consegui salvar o perfil. Verifique a conexão."));
+  };
   useEffect(() => onSnapshot(query(collection(db, "users", uid, "lancamentos"), where("tipo", "==", "investimento")), (s) => setMovs(s.docs.map((d) => d.data()))), [uid]);
   useEffect(() => onSnapshot(collection(db, "users", uid, "categorias"), (s) => setCats(s.docs.map((d) => d.data()))), [uid]);
 
@@ -122,6 +136,8 @@ export default function Wallet() {
     setModal({ gid: g.id, tela: "lista" }); // volta para a lista, já com o novo investimento
   };
   const gm = modal ? lista.find((g) => g.id === modal.gid) : null; // grupo aberto no modal
+  const alvo = (g) => PERFIS[perfil].alvo[g.id] ?? 0;
+  const dif = (g, k) => { const d = pct(tot[k].saldo, total) - alvo(g); return d === 0 ? "na meta" : d > 0 ? `${d} p.p. acima` : `${-d} p.p. abaixo`; };
   const km = gm ? lista.indexOf(gm) : -1;
   const r = gm ? rasc[gm.id] || { nome: "", valor: "" } : { nome: "", valor: "" };
 
@@ -149,6 +165,15 @@ export default function Wallet() {
             ? <div className="w-44"><Pizza fatias={fatias} /></div>
             : <p className="max-w-56 text-sm text-suave">A rosca aparece quando houver saldo nos seus investimentos.</p>}
         </div>
+        <div className="mt-4 space-y-2">
+          <p className="text-sm text-suave">Perfil do investidor <span className="text-xs">({PERFIS[perfil].info})</span></p>
+          <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Perfil do investidor">
+            {Object.entries(PERFIS).map(([k, v]) => (
+              <button key={k} type="button" role="radio" aria-checked={perfil === k} onClick={() => escolherPerfil(k)}
+                className={`rounded-xl px-2 py-2 text-sm font-bold transition ${perfil === k ? "bg-neon text-white" : "bg-[#1A1A1A] text-suave hover:bg-[#222]"}`}>{v.nome}</button>
+            ))}
+          </div>
+        </div>
       </section>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -161,8 +186,12 @@ export default function Wallet() {
               <span className="font-extrabold tabular-nums" style={{ color: g.cor }}>{pct(tot[k].saldo, total)}%</span>
             </div>
             <p className="mt-3 text-2xl font-extrabold tabular-nums">{brl(tot[k].saldo)}</p>
-            <div className="mt-2 h-1.5 rounded-full bg-[#0F0F0F]"><div className="h-full rounded-full" style={{ width: `${pct(tot[k].saldo, total)}%`, background: g.cor }} /></div>
-            <p className="mt-2 text-xs tabular-nums text-suave">{tot[k].n} investimento{tot[k].n !== 1 && "s"}{tot[k].rend !== 0 && <> · rendeu <b style={{ color: COR_REND }}>{sinal(tot[k].rend)}</b></>}</p>
+            <div className="relative mt-2 h-1.5 rounded-full bg-[#0F0F0F]">
+              <div className="h-full rounded-full" style={{ width: `${pct(tot[k].saldo, total)}%`, background: g.cor }} />
+              <span className="absolute -top-1 h-3.5 w-0.5 bg-white/80" style={{ left: `${alvo(g)}%` }} aria-hidden="true" />
+            </div>
+            <p className="mt-2 text-xs tabular-nums text-suave">Meta {PERFIS[perfil].nome}: <b>{alvo(g)}%</b>{total > 0 && <> · {dif(g, k)}</>}</p>
+            <p className="mt-1 text-xs tabular-nums text-suave">{tot[k].n} investimento{tot[k].n !== 1 && "s"}{tot[k].rend !== 0 && <> · rendeu <b style={{ color: COR_REND }}>{sinal(tot[k].rend)}</b></>}</p>
           </button>
         ))}
       </div>
@@ -174,7 +203,7 @@ export default function Wallet() {
               <Selo g={gm} />
               <div className="min-w-0 flex-1">
                 <b className="block truncate">{gm.nome}</b>
-                <span className="text-xs tabular-nums text-suave">{tot[km].n} investimento{tot[km].n !== 1 && "s"} · {brl(tot[km].saldo)} · {pct(tot[km].saldo, total)}% da carteira</span>
+                <span className="text-xs tabular-nums text-suave">{tot[km].n} investimento{tot[km].n !== 1 && "s"} · {brl(tot[km].saldo)} · {pct(tot[km].saldo, total)}% da carteira · meta {alvo(gm)}%</span>
               </div>
               <button type="button" onClick={fechar} aria-label="Fechar" className="px-2 text-2xl text-suave">×</button>
             </div>
