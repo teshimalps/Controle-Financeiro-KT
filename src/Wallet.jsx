@@ -145,7 +145,7 @@ export default function Wallet() {
   const r = gm ? rasc[gm.id] || { nome: "", valor: "" } : { nome: "", valor: "" };
 
   return (
-    <div className="mx-auto flex min-h-[calc(100vh-6rem)] w-full max-w-6xl flex-col gap-5 p-4 md:p-8">
+    <div className="mx-auto flex min-h-[calc(100vh-6rem)] w-full max-w-6xl flex-col gap-4 overflow-x-hidden p-3 sm:gap-5 sm:p-4 md:p-8">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-suave">Método ARCA</p>
@@ -157,7 +157,7 @@ export default function Wallet() {
         </div>
       </div>
 
-      <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-white/[0.02] p-6 md:p-8">
+      <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-white/[0.02] p-4 sm:p-6 md:p-8">
         <div className="flex flex-wrap items-end justify-between gap-6">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-suave">Patrimônio investido</p>
@@ -169,7 +169,7 @@ export default function Wallet() {
             <div className="inline-flex w-full rounded-full border border-white/10 bg-black/30 p-1 sm:w-auto">
               {Object.entries(PERFIS).map(([k, v]) => (
                 <button key={k} type="button" role="radio" aria-checked={perfil === k} onClick={() => escolherPerfil(k)}
-                  className={`flex-1 rounded-full px-4 py-2 text-sm font-semibold transition sm:flex-none ${perfil === k ? "bg-white text-black" : "text-suave hover:text-tinta"}`}>{v.nome}</button>
+                  className={`flex-1 rounded-full px-2 py-2 text-sm font-semibold transition sm:flex-none sm:px-4 ${perfil === k ? "bg-white text-black" : "text-suave hover:text-tinta"}`}>{v.nome}</button>
               ))}
             </div>
           </div>
@@ -188,7 +188,7 @@ export default function Wallet() {
         {lista.map((g, k) => (
           <button key={g.id} type="button" onClick={() => setModal({ gid: g.id, tela: "lista" })} aria-label={`Abrir ${g.nome}`}
             onMouseMove={luz} style={{ "--x": "50%", "--y": "0%" }}
-            className="group relative isolate flex min-h-40 flex-col justify-between overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] p-6 text-left transition duration-300 hover:-translate-y-0.5 hover:border-white/25 hover:bg-white/[0.06] md:p-8">
+            className="group relative isolate flex min-h-36 flex-col justify-between gap-4 overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] p-5 text-left transition duration-300 hover:-translate-y-0.5 hover:border-white/25 hover:bg-white/[0.06] sm:min-h-40 sm:p-6 md:p-8">
             <span className="pointer-events-none absolute inset-0 -z-10 opacity-0 transition-opacity duration-300 group-hover:opacity-100 group-focus-visible:opacity-100" style={{ background: `radial-gradient(460px circle at var(--x) var(--y), ${g.cor}38, transparent 65%)` }} aria-hidden="true" />
             <span className="absolute inset-x-0 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${g.cor}, transparent)` }} aria-hidden="true" />
             <div className="flex items-start justify-between gap-3">
@@ -212,7 +212,7 @@ export default function Wallet() {
 
       {gm && (
         <div className="anim-fundo fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center sm:p-6" onMouseDown={(e) => { if (e.target === e.currentTarget) fechar(); }}>
-          <div role="dialog" aria-modal="true" aria-label={gm.nome} className="anim-modal relative max-h-[92vh] w-full max-w-2xl space-y-5 overflow-y-auto rounded-t-3xl border border-white/10 bg-[#171717] p-6 shadow-2xl sm:rounded-3xl md:p-8">
+          <div role="dialog" aria-modal="true" aria-label={gm.nome} className="anim-modal relative max-h-[92vh] w-full max-w-2xl space-y-4 overflow-y-auto rounded-t-3xl border border-white/10 bg-[#171717] p-4 pb-8 shadow-2xl sm:space-y-5 sm:rounded-3xl sm:p-6 md:p-8">
             <span className="absolute inset-x-0 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${gm.cor}, transparent)` }} aria-hidden="true" />
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -264,10 +264,10 @@ export default function Wallet() {
                     const saldo = saldoDe(it), rend = rendDe(it), inicial = Number(it.inicial ?? it.valor) || 0, mov = saldo - inicial, c = cotacao(it);
                     return (
                       <li key={it.id} className="space-y-1.5">
-                        <div className="grid grid-cols-[1fr_8rem_auto] items-center gap-2">
-                          <input className={campo} value={it.nome} onChange={(e) => mudarI(gm.id, it.id, { nome: e.target.value })} aria-label="Nome do investimento" />
-                          <CampoValor className={campo} valor={saldo} onCommit={(n) => mudarI(gm.id, it.id, { inicial: Number((n - mov).toFixed(2)) })} aria-label={`Saldo de ${it.nome}`} />
-                          <button type="button" onClick={() => remover(gm, it)} aria-label={`Remover ${it.nome}`} className="px-2 text-xl text-suave hover:text-tinta">×</button>
+                        <div className="grid grid-cols-[1fr_auto] items-center gap-2 sm:grid-cols-[1fr_8rem_auto]">
+                          <input className={`${campo} order-1`} value={it.nome} onChange={(e) => mudarI(gm.id, it.id, { nome: e.target.value })} aria-label="Nome do investimento" />
+                          <CampoValor className={`${campo} order-3 col-span-2 sm:order-none sm:col-span-1`} valor={saldo} onCommit={(n) => mudarI(gm.id, it.id, { inicial: Number((n - mov).toFixed(2)) })} aria-label={`Saldo de ${it.nome}`} />
+                          <button type="button" onClick={() => remover(gm, it)} aria-label={`Remover ${it.nome}`} className="order-2 px-2 text-xl text-suave hover:text-tinta sm:order-none">×</button>
                         </div>
                         {c && !it.nome.includes(c.nome) && <p className="truncate text-xs text-suave">{c.nome} · {fmtPreco(c.preco)}</p>}
                         {gm.id === "acoes" && (

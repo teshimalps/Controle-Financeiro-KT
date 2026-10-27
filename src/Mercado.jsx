@@ -69,9 +69,9 @@ export default function Mercado({ mercado, jaTem, onAdd }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row">
         <input className={campo} placeholder="Buscar código ou nome" value={texto} onChange={(e) => { setTexto(e.target.value); setLimite(40); }} aria-label="Buscar ações" />
-        <select className="w-44 shrink-0 rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-tinta" value={ordem} onChange={(e) => setOrdem(e.target.value)} aria-label="Ordenar">
+        <select className="w-full shrink-0 rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-tinta sm:w-44" value={ordem} onChange={(e) => setOrdem(e.target.value)} aria-label="Ordenar">
           {Object.entries(ORDENS).map(([k, [nome]]) => <option key={k} value={k}>{nome}</option>)}
         </select>
       </div>
@@ -111,11 +111,11 @@ export default function Mercado({ mercado, jaTem, onAdd }) {
       <ul className="divide-y divide-white/5">
         {filtrada.slice(0, limite).map((a) => (
           <li key={a.ticker} className="flex flex-wrap items-center gap-3 py-2.5">
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 basis-full sm:flex-1 sm:basis-0">
               <p className="font-semibold leading-tight">{a.nome}</p>
               <p className="text-xs tracking-wide text-suave">{a.ticker}</p>
             </div>
-            <div className="text-right tabular-nums">
+            <div className="flex-1 tabular-nums sm:flex-none sm:text-right">
               <p className="font-semibold">{fmtPreco(a.preco)}</p>
               <p className="text-xs font-semibold" style={{ color: corVar(a.variacao) }}><Seta v={a.variacao} /> {fmtVar(a.variacao)}</p>
             </div>
