@@ -25,12 +25,49 @@ async function carregarTudo(token, sinal) {
       .filter((s) => TICKER.test(s.stock || "") && Number.isFinite(Number(s.change)))
       .map((s) => ({ ticker: s.stock, nome: s.name || s.stock, preco: Number(s.close), variacao: Number(s.change) })))) : Promise.resolve(null),
   ]);
-  return { ano, selic, ipca12, selicA, selicB, ipcaA, ipcaB, moedas, ibov, ranking };
+  return { t: Date.now(), ano, selic, ipca12, selicA, selicB, ipcaA, ipcaB, moedas, ibov, ranking };
 }
 
-function Bloco({ titulo, children }) {
+// Número que "sobe" de zero até o valor quando os dados chegam
+function Contador({ valor, formato }) {
+  const [v, setV] = useState(0);
+  useEffect(() => {
+    if (valor == null) return undefined;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { setV(valor); return undefined; }
+    let raf;
+    const t0 = performance.now();
+    const passo = (t) => {
+      const p = Math.min(1, (t - t0) / 900);
+      setV(valor * (1 - Math.pow(1 - p, 3)));
+      if (p < 1) raf = requestAnimationFrame(passo);
+    };
+    raf = requestAnimationFrame(passo);
+    return () => cancelAnimationFrame(raf);
+  }, [valor]);
+  return valor == null ? "—" : formato(v);
+}
+
+// Cartão de destaque (1/4 da linha) com um ou dois números grandes
+function Destaque({ titulo, itens, atraso }) {
   return (
-    <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 md:p-6">
+    <section className="anim-entra rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-white/[0.02] p-5 md:p-6" style={{ animationDelay: `${atraso}ms` }}>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-suave">{titulo}</p>
+      <div className="mt-4 space-y-4">
+        {itens.map((i) => (
+          <div key={i.rotulo}>
+            <p className="text-3xl font-semibold tracking-tight tabular-nums"><Contador valor={i.valor} formato={pc} /></p>
+            <p className="mt-1 text-sm text-suave">{i.rotulo}</p>
+            {i.sub && <p className="text-[11px] text-suave">{i.sub}</p>}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function Bloco({ titulo, children, atraso = 0 }) {
+  return (
+    <section className="anim-entra rounded-3xl border border-white/10 bg-white/[0.03] p-5 md:p-6" style={{ animationDelay: `${atraso}ms` }}>
       <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-suave">{titulo}</p>
       <div className="mt-4 space-y-3">{children}</div>
     </section>
@@ -44,8 +81,8 @@ const Linha = ({ rotulo, valor, cor, sub }) => (
 );
 const Rank = ({ lista }) => (
   <ul className="divide-y divide-white/5">
-    {lista.map((a) => (
-      <li key={a.ticker} className="flex items-center justify-between gap-3 py-2">
+    {lista.map((a, i) => (
+      <li key={a.ticker} className="anim-entra flex items-center justify-between gap-3 py-2" style={{ animationDelay: `${i * 70 + 500}ms` }}>
         <div className="min-w-0"><p className="truncate text-sm font-semibold">{a.nome}</p><p className="text-xs text-suave">{a.ticker} · {fmtPreco(a.preco)}</p></div>
         <span className="shrink-0 text-sm font-semibold tabular-nums" style={{ color: corVar(a.variacao) }}><Seta v={a.variacao} /> {fmtVar(a.variacao)}</span>
       </li>
@@ -84,28 +121,29 @@ export default function Panorama({ token }) {
       </div>
       {!d && <p className="text-sm text-suave">Carregando…</p>}
       {d && (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <Bloco titulo="Juros e inflação">
-            <Linha rotulo="Selic hoje" valor={d.selic != null ? pc(d.selic) : null} />
-            <Linha rotulo={`Selic esperada ${d.ano}`} sub="mercado (Boletim Focus)" valor={d.selicA != null ? pc(d.selicA) : null} />
-            <Linha rotulo={`Selic esperada ${d.ano + 1}`} sub="mercado (Boletim Focus)" valor={d.selicB != null ? pc(d.selicB) : null} />
-            <Linha rotulo="Inflação (IPCA, 12 meses)" valor={d.ipca12 != null ? pc(d.ipca12) : null} />
-            <Linha rotulo={`IPCA esperado ${d.ano}`} sub="mercado (Boletim Focus)" valor={d.ipcaA != null ? pc(d.ipcaA) : null} />
-            <Linha rotulo={`IPCA esperado ${d.ano + 1}`} sub="mercado (Boletim Focus)" valor={d.ipcaB != null ? pc(d.ipcaB) : null} />
-          </Bloco>
-          <Bloco titulo="Câmbio e cripto">
-            {moeda("USDBRL", "Dólar")}{moeda("EURBRL", "Euro")}{moeda("BTCBRL", "Bitcoin", true)}{moeda("ETHBRL", "Ethereum", true)}
-          </Bloco>
-          <Bloco titulo="Bolsa brasileira">
-            {token === "" ? <p className="text-sm text-suave">Cole o token da brapi em “Ver mais ações” (grupo Ações) para ver o Ibovespa e o ranking.</p> : (
-              <>
-                <Linha rotulo="Ibovespa" valor={d.ibov ? <>{Number(d.ibov.regularMarketPrice).toLocaleString("pt-BR", { maximumFractionDigits: 0 })} <span className="text-xs" style={{ color: corVar(Number(d.ibov.regularMarketChangePercent)) }}><Seta v={Number(d.ibov.regularMarketChangePercent)} /> {fmtVar(Number(d.ibov.regularMarketChangePercent))}</span></> : null} />
-                {!alta && <p className="text-sm text-suave">Ranking indisponível agora.</p>}
-              </>
-            )}
-          </Bloco>
-          {alta && <Bloco titulo="5 ações que mais subiram"><Rank lista={alta} /></Bloco>}
-          {queda && <Bloco titulo="5 ações que mais caíram"><Rank lista={queda} /></Bloco>}
+        <div key={d.t} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <Destaque titulo="Juros hoje" atraso={0} itens={[{ rotulo: "Selic atual", valor: d.selic, sub: "meta definida pelo Copom" }]} />
+            <Destaque titulo="Juros esperados" atraso={80} itens={[{ rotulo: `Selic no fim de ${d.ano}`, valor: d.selicA }, { rotulo: `Selic no fim de ${d.ano + 1}`, valor: d.selicB }]} />
+            <Destaque titulo="Inflação hoje" atraso={160} itens={[{ rotulo: "IPCA em 12 meses", valor: d.ipca12, sub: "inflação oficial" }]} />
+            <Destaque titulo="Inflação esperada" atraso={240} itens={[{ rotulo: `IPCA no fim de ${d.ano}`, valor: d.ipcaA }, { rotulo: `IPCA no fim de ${d.ano + 1}`, valor: d.ipcaB }]} />
+          </div>
+          <p className="-mt-2 text-[11px] text-suave">Valores “esperados”: mediana do mercado no Boletim Focus (Banco Central).</p>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <Bloco titulo="Câmbio e cripto" atraso={320}>
+              {moeda("USDBRL", "Dólar")}{moeda("EURBRL", "Euro")}{moeda("BTCBRL", "Bitcoin", true)}{moeda("ETHBRL", "Ethereum", true)}
+            </Bloco>
+            <Bloco titulo="Bolsa brasileira" atraso={400}>
+              {token === "" ? <p className="text-sm text-suave">Cole o token da brapi em “Ver mais ações” (grupo Ações) para ver o Ibovespa e o ranking.</p> : (
+                <>
+                  <Linha rotulo="Ibovespa" valor={d.ibov ? <>{Number(d.ibov.regularMarketPrice).toLocaleString("pt-BR", { maximumFractionDigits: 0 })} <span className="text-xs" style={{ color: corVar(Number(d.ibov.regularMarketChangePercent)) }}><Seta v={Number(d.ibov.regularMarketChangePercent)} /> {fmtVar(Number(d.ibov.regularMarketChangePercent))}</span></> : null} />
+                  {!alta && <p className="text-sm text-suave">Ranking indisponível agora.</p>}
+                </>
+              )}
+            </Bloco>
+            {alta && <Bloco titulo="5 ações que mais subiram" atraso={480}><Rank lista={alta} /></Bloco>}
+            {queda && <Bloco titulo="5 ações que mais caíram" atraso={560}><Rank lista={queda} /></Bloco>}
+          </div>
         </div>
       )}
       <p className="text-[11px] text-suave">Fontes: Banco Central do Brasil (Selic, IPCA e Boletim Focus), AwesomeAPI (câmbio e cripto) e brapi (bolsa). Ranking entre as 100 ações mais negociadas. Informativo, não é recomendação de investimento.</p>
