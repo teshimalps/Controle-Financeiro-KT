@@ -12,6 +12,49 @@ const focus = async (indicador, ano, sinal) => {
 };
 const TICKER = /^[A-Z]{4}\d{1,2}$/;
 
+// Cotação + últimos ~30 dias (fechamentos) de um papel ou índice, com cache de 10 min (a brapi grátis aceita 1 papel por pedido)
+const cacheQuote = new Map();
+async function quoteComSerie(simbolo, token, sinal) {
+  const chave = `${simbolo}|${token}`, c = cacheQuote.get(chave);
+  if (c && Date.now() - c.t < 10 * 60 * 1000) return c.r;
+  const j = await json(`https://brapi.dev/api/quote/${encodeURIComponent(simbolo)}?range=1mo&interval=1d&token=${encodeURIComponent(token)}`, sinal);
+  const q = j.results[0];
+  const r = { preco: Number(q.regularMarketPrice), variacao: Number(q.regularMarketChangePercent), serie: (q.historicalDataPrice || []).map((x) => Number(x.close)).filter(Number.isFinite) };
+  cacheQuote.set(chave, { t: Date.now(), r });
+  return r;
+}
+// Ibovespa: tenta o índice; se a fonte não entregar, usa o BOVA11 (ETF que replica o índice) só para variação e gráfico
+async function buscarIbov(token, sinal) {
+  try { return { ...(await quoteComSerie("^BVSP", token, sinal)), pontos: true }; } catch (e1) {
+    try { return { ...(await quoteComSerie("BOVA11", token, sinal)), pontos: false }; } catch (e2) { throw new Error(e2.message || e1.message); }
+  }
+}
+
+// Gráfico pequeno de linha (últimos 30 dias). Cor pela tendência do período.
+function Mini({ serie, largura = 72, altura = 28 }) {
+  if (!serie || serie.length < 2) return <span className="inline-block" style={{ width: largura }} aria-hidden="true" />;
+  const min = Math.min(...serie), max = Math.max(...serie), dx = largura / (serie.length - 1);
+  const pts = serie.map((v, i) => `${(i * dx).toFixed(1)},${(altura - 2 - ((v - min) / (max - min || 1)) * (altura - 4)).toFixed(1)}`).join(" ");
+  const cor = corVar(serie[serie.length - 1] - serie[0]);
+  return (
+    <svg width={largura} height={altura} viewBox={`0 0 ${largura} ${altura}`} role="img" aria-label="Últimos 30 dias" className="shrink-0">
+      <title>Últimos 30 dias</title>
+      <polyline points={pts} fill="none" stroke={cor} strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" pathLength="1" className="anim-tracar" />
+    </svg>
+  );
+}
+// Carrega o gráfico de uma ação sozinho, sem atrasar o resto da tela
+function MiniAcao({ ticker, token }) {
+  const [serie, setSerie] = useState(null);
+  useEffect(() => {
+    if (!token) return undefined;
+    const c = new AbortController();
+    quoteComSerie(ticker, token, c.signal).then((r) => setSerie(r.serie), () => {});
+    return () => c.abort();
+  }, [ticker, token]);
+  return <Mini serie={serie} />;
+}
+
 async function carregarTudo(token, sinal) {
   const ano = new Date().getFullYear();
   const pega = (p) => p.then((v) => v, () => null); // cada bloco falha sozinho
@@ -20,7 +63,7 @@ async function carregarTudo(token, sinal) {
     pega(focus("Selic", ano, sinal)), pega(focus("Selic", ano + 1, sinal)),
     pega(focus("IPCA", ano, sinal)), pega(focus("IPCA", ano + 1, sinal)),
     pega(json("https://economia.awesomeapi.com.br/json/last/USD-BRL,EUR-BRL,BTC-BRL,ETH-BRL", sinal)),
-    token ? pega(json(`https://brapi.dev/api/quote/%5EBVSP?token=${encodeURIComponent(token)}`, sinal).then((j) => j.results[0])) : Promise.resolve(null),
+    token ? buscarIbov(token, sinal).then((v) => v, (e) => ({ erro: e.message || "indisponível" })) : Promise.resolve(null),
     token ? pega(json(`https://brapi.dev/api/quote/list?type=stock&limit=100&sortBy=volume&sortOrder=desc&token=${encodeURIComponent(token)}`, sinal).then((j) => (j.stocks || [])
       .filter((s) => TICKER.test(s.stock || "") && Number.isFinite(Number(s.change)))
       .map((s) => ({ ticker: s.stock, nome: s.name || s.stock, preco: Number(s.close), variacao: Number(s.change) })))) : Promise.resolve(null),
@@ -79,12 +122,13 @@ const Linha = ({ rotulo, valor, cor, sub }) => (
     <b className="text-lg font-semibold tabular-nums" style={cor ? { color: cor } : undefined}>{valor ?? "—"}</b>
   </div>
 );
-const Rank = ({ lista }) => (
+const Rank = ({ lista, token }) => (
   <ul className="divide-y divide-white/5">
     {lista.map((a, i) => (
-      <li key={a.ticker} className="anim-entra flex items-center justify-between gap-3 py-2" style={{ animationDelay: `${i * 70 + 500}ms` }}>
-        <div className="min-w-0"><p className="truncate text-sm font-semibold">{a.nome}</p><p className="text-xs text-suave">{a.ticker} · {fmtPreco(a.preco)}</p></div>
-        <span className="shrink-0 text-sm font-semibold tabular-nums" style={{ color: corVar(a.variacao) }}><Seta v={a.variacao} /> {fmtVar(a.variacao)}</span>
+      <li key={a.ticker} className="anim-entra flex items-center gap-3 py-2.5" style={{ animationDelay: `${i * 70 + 500}ms` }}>
+        <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{a.nome}</p><p className="text-xs text-suave">{a.ticker} · {fmtPreco(a.preco)}</p></div>
+        <MiniAcao ticker={a.ticker} token={token} />
+        <span className="w-24 shrink-0 text-right text-sm font-semibold tabular-nums" style={{ color: corVar(a.variacao) }}><Seta v={a.variacao} /> {fmtVar(a.variacao)}</span>
       </li>
     ))}
   </ul>
@@ -129,24 +173,42 @@ export default function Panorama({ token }) {
             <Destaque titulo="Inflação esperada" atraso={240} itens={[{ rotulo: `IPCA no fim de ${d.ano}`, valor: d.ipcaA }, { rotulo: `IPCA no fim de ${d.ano + 1}`, valor: d.ipcaB }]} />
           </div>
           <p className="-mt-2 text-[11px] text-suave">Valores “esperados”: mediana do mercado no Boletim Focus (Banco Central).</p>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <Bloco titulo="Câmbio e cripto" atraso={320}>
-              {moeda("USDBRL", "Dólar")}{moeda("EURBRL", "Euro")}{moeda("BTCBRL", "Bitcoin", true)}{moeda("ETHBRL", "Ethereum", true)}
-            </Bloco>
-            <Bloco titulo="Bolsa brasileira" atraso={400}>
-              {token === "" ? <p className="text-sm text-suave">Cole o token da brapi em “Ver mais ações” (grupo Ações) para ver o Ibovespa e o ranking.</p> : (
-                <>
-                  <Linha rotulo="Ibovespa" valor={d.ibov ? <>{Number(d.ibov.regularMarketPrice).toLocaleString("pt-BR", { maximumFractionDigits: 0 })} <span className="text-xs" style={{ color: corVar(Number(d.ibov.regularMarketChangePercent)) }}><Seta v={Number(d.ibov.regularMarketChangePercent)} /> {fmtVar(Number(d.ibov.regularMarketChangePercent))}</span></> : null} />
-                  {!alta && <p className="text-sm text-suave">Ranking indisponível agora.</p>}
-                </>
+          <Bloco titulo="Mercados" atraso={320}>
+            <div className="grid gap-6 sm:grid-cols-2">
+              <div className="space-y-3">
+                <p className="text-sm font-semibold">Câmbio</p>
+                {moeda("USDBRL", "Dólar")}{moeda("EURBRL", "Euro")}
+              </div>
+              <div className="space-y-3">
+                <p className="text-sm font-semibold">Cripto</p>
+                {moeda("BTCBRL", "Bitcoin", true)}{moeda("ETHBRL", "Ethereum", true)}
+              </div>
+            </div>
+            <div className="space-y-3 border-t border-white/10 pt-4">
+              <p className="text-sm font-semibold">Bolsa brasileira</p>
+              {token === "" ? <p className="text-sm text-suave">Cole o token da brapi em “Ver mais ações” (grupo Ações) para ver o Ibovespa e os rankings.</p> : !d.ibov || d.ibov.erro ? (
+                <p className="text-sm text-suave">Ibovespa indisponível agora{d.ibov?.erro ? ` (${d.ibov.erro})` : ""}.</p>
+              ) : (
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm text-suave">{d.ibov.pontos ? "Ibovespa" : "Ibovespa (via BOVA11, só a variação)"}</p>
+                    {d.ibov.pontos && <p className="text-2xl font-semibold tabular-nums"><Contador valor={d.ibov.preco} formato={(v) => Math.round(v).toLocaleString("pt-BR")} /> <span className="text-xs text-suave">pontos</span></p>}
+                  </div>
+                  <Mini serie={d.ibov.serie} largura={120} altura={40} />
+                  <span className="shrink-0 text-lg font-semibold tabular-nums" style={{ color: corVar(d.ibov.variacao) }}><Seta v={d.ibov.variacao} /> {fmtVar(d.ibov.variacao)}</span>
+                </div>
               )}
-            </Bloco>
-            {alta && <Bloco titulo="5 ações que mais subiram" atraso={480}><Rank lista={alta} /></Bloco>}
-            {queda && <Bloco titulo="5 ações que mais caíram" atraso={560}><Rank lista={queda} /></Bloco>}
-          </div>
+            </div>
+          </Bloco>
+          {(alta || queda) && (
+            <div className="grid gap-4 md:grid-cols-2">
+              {alta && <Bloco titulo="5 ações que mais subiram" atraso={400}><Rank lista={alta} token={token} /></Bloco>}
+              {queda && <Bloco titulo="5 ações que mais caíram" atraso={480}><Rank lista={queda} token={token} /></Bloco>}
+            </div>
+          )}
         </div>
       )}
-      <p className="text-[11px] text-suave">Fontes: Banco Central do Brasil (Selic, IPCA e Boletim Focus), AwesomeAPI (câmbio e cripto) e brapi (bolsa). Ranking entre as 100 ações mais negociadas. Informativo, não é recomendação de investimento.</p>
+      <p className="text-[11px] text-suave">Fontes: Banco Central do Brasil (Selic, IPCA e Boletim Focus), AwesomeAPI (câmbio e cripto) e brapi (bolsa). Ranking entre as 100 ações mais negociadas; gráficos dos últimos 30 dias. Informativo, não é recomendação de investimento.</p>
     </div>
   );
 }
