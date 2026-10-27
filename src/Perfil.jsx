@@ -4,6 +4,7 @@ import { doc, setDoc } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import Avatar from "./Avatar.jsx";
 import CampoSenha from "./CampoSenha.jsx";
+import ZerarInvestimentos from "./ZerarInvestimentos.jsx";
 
 const campo = "w-full rounded-xl border border-borda bg-[#141414] px-4 py-3 text-tinta";
 const erroSenha = {
@@ -121,6 +122,7 @@ export default function Perfil({ user, perfil }) {
           )}
         </section>
       )}
+      <ZerarInvestimentos uid={uid} painel={painel} />
       <button onClick={() => signOut(auth)} className="btn-vidro w-full">Sair da conta</button>
     </div>
   );
