@@ -126,6 +126,12 @@ export default function Wallet() {
     const q = Number(n.qtd) || 0, pm = Number(n.pm) || 0;
     mudarI(gid, it.id, q > 0 && pm > 0 ? { ...patch, inicial: Number((q * pm - mov).toFixed(2)) } : patch);
   };
+  // luz colorida que segue o mouse dentro do cartão
+  const luz = (e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    e.currentTarget.style.setProperty("--x", `${e.clientX - r.left}px`);
+    e.currentTarget.style.setProperty("--y", `${e.clientY - r.top}px`);
+  };
   const alvo = (g) => PERFIS[perfil].alvo[g.id] ?? 0;
   const dif = (g, k) => { const d = pct(tot[k].saldo, total) - alvo(g); return d === 0 ? "na meta" : d > 0 ? `${d} p.p. acima` : `${-d} p.p. abaixo`; };
   const cotacao = (it) => mercado.mapa.get(achaTicker(it.nome)); // cotação real, se o nome tiver o código da ação
@@ -181,7 +187,9 @@ export default function Wallet() {
       <div className="grid flex-1 auto-rows-fr gap-4 md:grid-cols-2">
         {lista.map((g, k) => (
           <button key={g.id} type="button" onClick={() => setModal({ gid: g.id, tela: "lista" })} aria-label={`Abrir ${g.nome}`}
-            className="group relative flex min-h-40 flex-col justify-between overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] p-6 text-left transition duration-300 hover:-translate-y-0.5 hover:border-white/25 hover:bg-white/[0.06] md:p-8">
+            onMouseMove={luz} style={{ "--x": "50%", "--y": "0%" }}
+            className="group relative isolate flex min-h-40 flex-col justify-between overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] p-6 text-left transition duration-300 hover:-translate-y-0.5 hover:border-white/25 hover:bg-white/[0.06] md:p-8">
+            <span className="pointer-events-none absolute inset-0 -z-10 opacity-0 transition-opacity duration-300 group-hover:opacity-100 group-focus-visible:opacity-100" style={{ background: `radial-gradient(460px circle at var(--x) var(--y), ${g.cor}38, transparent 65%)` }} aria-hidden="true" />
             <span className="absolute inset-x-0 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${g.cor}, transparent)` }} aria-hidden="true" />
             <div className="flex items-start justify-between gap-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-suave"><span className="mr-2 inline-block h-2 w-2 rounded-full align-middle" style={{ background: g.cor }} />{g.nome}</p>
