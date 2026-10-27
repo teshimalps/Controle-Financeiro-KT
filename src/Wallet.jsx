@@ -208,7 +208,7 @@ export default function Wallet() {
         ))}
       </div>
 
-      <Panorama token={mercado.token} hgKey={mercado.hgKey} salvarHg={mercado.salvarHg} />
+      <Panorama uid={uid} token={mercado.token} hgKey={mercado.hgKey} salvarHg={mercado.salvarHg} />
 
       {gm && (
         <div className="anim-fundo fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center sm:p-6" onMouseDown={(e) => { if (e.target === e.currentTarget) fechar(); }}>

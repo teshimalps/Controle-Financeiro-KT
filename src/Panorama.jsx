@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { corVar, fmtPreco, fmtVar } from "./mercado.js";
 import { Seta } from "./Mercado.jsx";
+import { lerHistorico, registrarPrecos, serieDe } from "./historico.js";
 
 const pc = (v) => `${Number(v).toFixed(2).replace(".", ",")}%`;
 const json = async (url, sinal) => { const r = await fetch(url, { signal: sinal }); if (!r.ok) throw new Error(String(r.status)); return r.json(); };
@@ -14,50 +15,25 @@ const focus = async (indicador, ano, sinal) => {
 };
 const TICKER = /^[A-Z]{4}\d{1,2}$/;
 
-// Cotação + últimos ~30 dias (fechamentos) de um papel ou índice, com cache de 10 min (a brapi grátis aceita 1 papel por pedido)
-const cacheQuote = new Map();
-async function quoteComSerie(simbolo, token, sinal, historico = true) {
-  const chave = `${simbolo}|${token}|${historico}`, c = cacheQuote.get(chave);
-  if (c && Date.now() - c.t < 10 * 60 * 1000) return c.r;
-  const j = await json(`https://brapi.dev/api/quote/${encodeURIComponent(simbolo)}?${historico ? "range=1mo&interval=1d&" : ""}token=${encodeURIComponent(token)}`, sinal);
-  const q = j.results[0];
-  const r = { preco: Number(q.regularMarketPrice), variacao: Number(q.regularMarketChangePercent), serie: (q.historicalDataPrice || []).map((x) => Number(x.close)).filter(Number.isFinite) };
-  cacheQuote.set(chave, { t: Date.now(), r });
-  return r;
-}
 // Índices (Ibovespa e bolsas do mundo) pelo HG Brasil Finance, com a chave gratuita da própria pessoa
 async function buscarIndices(chave, sinal) {
   const j = await json(`https://api.hgbrasil.com/finance?key=${encodeURIComponent(chave)}&format=json-cors`, sinal);
   if (j.valid_key === false) throw new Error("chave inválida");
   return j.results.stocks;
 }
-let historicoBloqueado = false; // a brapi grátis só libera histórico de poucas ações; ao levar 401 paramos de insistir
-
-// Gráfico pequeno de linha (últimos 30 dias). Cor pela tendência do período.
+// Gráfico pequeno de linha com os dias guardados pelo app. Cor pela tendência do período.
 function Mini({ serie, largura = 72, altura = 28 }) {
   if (!serie || serie.length < 2) return <span className="inline-block" style={{ width: largura }} aria-hidden="true" />;
   const min = Math.min(...serie), max = Math.max(...serie), dx = largura / (serie.length - 1);
   const pts = serie.map((v, i) => `${(i * dx).toFixed(1)},${(altura - 2 - ((v - min) / (max - min || 1)) * (altura - 4)).toFixed(1)}`).join(" ");
   const cor = corVar(serie[serie.length - 1] - serie[0]);
   return (
-    <svg width={largura} height={altura} viewBox={`0 0 ${largura} ${altura}`} role="img" aria-label="Últimos 30 dias" className="shrink-0">
-      <title>Últimos 30 dias</title>
+    <svg width={largura} height={altura} viewBox={`0 0 ${largura} ${altura}`} role="img" aria-label="Histórico de preços guardado no app" className="shrink-0">
+      <title>Histórico guardado pelo app</title>
       <polyline points={pts} fill="none" stroke={cor} strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" pathLength="1" className="anim-tracar" />
     </svg>
   );
 }
-// Carrega o gráfico de uma ação sozinho, sem atrasar o resto da tela
-function MiniAcao({ ticker, token }) {
-  const [serie, setSerie] = useState(null);
-  useEffect(() => {
-    if (!token || historicoBloqueado) return undefined;
-    const c = new AbortController();
-    quoteComSerie(ticker, token, c.signal).then((r) => setSerie(r.serie), (e) => { if (e.message === "401") historicoBloqueado = true; });
-    return () => c.abort();
-  }, [ticker, token]);
-  return <Mini serie={serie} />;
-}
-
 async function carregarTudo(token, hgKey, sinal) {
   const ano = new Date().getFullYear();
   const pega = (p) => p.then((v) => v, () => null); // cada bloco falha sozinho
@@ -125,12 +101,12 @@ const Linha = ({ rotulo, valor, cor, sub }) => (
     <b className="text-lg font-semibold tabular-nums" style={cor ? { color: cor } : undefined}>{valor ?? "—"}</b>
   </div>
 );
-const Rank = ({ lista, token }) => (
+const Rank = ({ lista, hist }) => (
   <ul className="divide-y divide-white/5">
     {lista.map((a, i) => (
       <li key={a.ticker} className="anim-entra flex items-center gap-3 py-2.5" style={{ animationDelay: `${i * 70 + 500}ms` }}>
         <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{a.nome}</p><p className="text-xs text-suave">{a.ticker} · {fmtPreco(a.preco)}</p></div>
-        <MiniAcao ticker={a.ticker} token={token} />
+        <Mini serie={serieDe(hist, a.ticker, a.preco)} />
         <span className="w-24 shrink-0 text-right text-sm font-semibold tabular-nums" style={{ color: corVar(a.variacao) }}><Seta v={a.variacao} /> {fmtVar(a.variacao)}</span>
       </li>
     ))}
@@ -138,16 +114,18 @@ const Rank = ({ lista, token }) => (
 );
 
 // Resumo do Brasil e do mundo: bolsa, juros, inflação, câmbio e criptomoedas
-export default function Panorama({ token, hgKey, salvarHg }) {
+export default function Panorama({ uid, token, hgKey, salvarHg }) {
   const [d, setD] = useState(null);
   const [carregando, setCarregando] = useState(false);
   const [chaveTxt, setChaveTxt] = useState("");
+  const [hist, setHist] = useState([]); // dias de preços guardados
+  useEffect(() => { lerHistorico(uid).then(setHist, () => {}); }, [uid]);
 
   const atualizar = useCallback((sinal) => {
     if (token === null || hgKey === null) return undefined;
     setCarregando(true);
-    return carregarTudo(token, hgKey, sinal).then((r) => { if (!sinal?.aborted) setD(r); }).finally(() => { if (!sinal?.aborted) setCarregando(false); });
-  }, [token, hgKey]);
+    return carregarTudo(token, hgKey, sinal).then((r) => { if (!sinal?.aborted) { setD(r); registrarPrecos(uid, r.ranking, "top100"); } }).finally(() => { if (!sinal?.aborted) setCarregando(false); });
+  }, [token, hgKey, uid]);
   useEffect(() => { const c = new AbortController(); atualizar(c.signal); return () => c.abort(); }, [atualizar]);
 
   const m = d?.moedas;
@@ -213,13 +191,13 @@ export default function Panorama({ token, hgKey, salvarHg }) {
           </Bloco>
           {(alta || queda) && (
             <div className="grid gap-4 md:grid-cols-2">
-              {alta && <Bloco titulo="5 ações que mais subiram" atraso={400}><Rank lista={alta} token={token} /></Bloco>}
-              {queda && <Bloco titulo="5 ações que mais caíram" atraso={480}><Rank lista={queda} token={token} /></Bloco>}
+              {alta && <Bloco titulo="5 ações que mais subiram" atraso={400}><Rank lista={alta} hist={hist} /></Bloco>}
+              {queda && <Bloco titulo="5 ações que mais caíram" atraso={480}><Rank lista={queda} hist={hist} /></Bloco>}
             </div>
           )}
         </div>
       )}
-      <p className="text-[11px] text-suave">Fontes: Banco Central do Brasil (Selic, IPCA e Boletim Focus), AwesomeAPI (câmbio e cripto), HG Brasil (índices das bolsas) e brapi (ações). Ranking entre as 100 ações mais negociadas; gráficos dos últimos 30 dias. Informativo, não é recomendação de investimento.</p>
+      <p className="text-[11px] text-suave">Fontes: Banco Central do Brasil (Selic, IPCA e Boletim Focus), AwesomeAPI (câmbio e cripto), HG Brasil (índices das bolsas) e brapi (ações). Ranking entre as 100 ações mais negociadas; gráficos formados com os preços que o app guarda a cada dia útil (começam amanhã e ganham pontos com o tempo). Informativo, não é recomendação de investimento.</p>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { db } from "./firebase";
 import { carregarLista } from "./mercado.js";
+import { registrarPrecos } from "./historico.js";
 
 // Token da brapi guardado só na conta da pessoa (users/{uid}/config/mercado). Só busca a lista quando `ativo`.
 export default function useMercado(uid, ativo) {
@@ -16,10 +17,10 @@ export default function useMercado(uid, ativo) {
   const carregar = useCallback(async (forcar = false) => {
     if (!token) return;
     setCarregando(true); setErro("");
-    try { setLista(await carregarLista(token, forcar)); }
+    try { const l = await carregarLista(token, forcar); setLista(l); registrarPrecos(uid, l, "todas"); }
     catch (e) { setErro(e.message || "Não consegui carregar as cotações."); }
     finally { setCarregando(false); }
-  }, [token]);
+  }, [token, uid]);
 
   useEffect(() => { if (ativo && token) carregar(false); }, [ativo, token, carregar]);
 
