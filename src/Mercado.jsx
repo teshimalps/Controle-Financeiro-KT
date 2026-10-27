@@ -44,6 +44,9 @@ export default function Mercado({ mercado, jaTem, onAdd }) {
   const [avancada, setAvancada] = useState(false);
   const [f, setF] = useState(vazios);
   const [limite, setLimite] = useState(40);
+  const [comprando, setComprando] = useState(null); // ação em que se está informando quantidade e preço pago
+  const [qtd, setQtd] = useState("");
+  const [pago, setPago] = useState("");
   const mudar = (k, v) => { setF((x) => ({ ...x, [k]: v })); setLimite(40); };
 
   const setores = useMemo(() => [...new Set((mercado.lista || []).map((a) => a.setor).filter(Boolean))].sort(), [mercado.lista]);
@@ -107,7 +110,7 @@ export default function Mercado({ mercado, jaTem, onAdd }) {
 
       <ul className="divide-y divide-white/5">
         {filtrada.slice(0, limite).map((a) => (
-          <li key={a.ticker} className="flex items-center gap-3 py-2.5">
+          <li key={a.ticker} className="flex flex-wrap items-center gap-3 py-2.5">
             <div className="min-w-0 flex-1">
               <b className="tracking-wide">{a.ticker}</b>
               <p className="truncate text-xs text-suave">{a.nome}</p>
@@ -116,7 +119,16 @@ export default function Mercado({ mercado, jaTem, onAdd }) {
               <p className="font-semibold">{fmtPreco(a.preco)}</p>
               <p className="text-xs font-semibold" style={{ color: corVar(a.variacao) }}><Seta v={a.variacao} /> {fmtVar(a.variacao)}</p>
             </div>
-            <button type="button" disabled={tem(a.ticker)} onClick={() => onAdd(a.ticker)} className="shrink-0 rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold disabled:opacity-40">{tem(a.ticker) ? "Na carteira" : "+ Carteira"}</button>
+            <button type="button" disabled={tem(a.ticker)} onClick={() => { setComprando(comprando === a.ticker ? null : a.ticker); setQtd(""); setPago(String(a.preco)); }} className="shrink-0 rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold disabled:opacity-40">{tem(a.ticker) ? "Na carteira" : "+ Carteira"}</button>
+            {comprando === a.ticker && (
+              <form className="basis-full space-y-2 pt-2" onSubmit={(e) => { e.preventDefault(); if (Number(qtd) > 0 && Number(pago) > 0) { onAdd(a.ticker, Number(qtd), Number(pago)); setComprando(null); } }}>
+                <div className="grid grid-cols-2 gap-2">
+                  <Campo rotulo="Quantidade comprada" valor={qtd} onChange={setQtd} step="any" min="0" autoFocus />
+                  <Campo rotulo="Preço pago (por ação)" valor={pago} onChange={setPago} step="0.01" min="0" />
+                </div>
+                <button className="rounded-lg bg-white px-4 py-2 text-xs font-semibold text-black">Adicionar à carteira</button>
+              </form>
+            )}
           </li>
         ))}
       </ul>

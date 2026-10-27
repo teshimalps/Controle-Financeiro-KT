@@ -22,12 +22,12 @@ const PERFIS = {
 const pct = (v, t) => (t > 0 && v > 0 ? Math.round((v / t) * 100) : 0);
 
 // Campo que mostra o saldo e deixa digitar sem "pular" enquanto você escreve
-function CampoValor({ valor, onCommit, ...resto }) {
+function CampoValor({ valor, onCommit, mascara = "R$ •••••", passo = "0.01", ...resto }) {
   const [txt, setTxt] = useState(null);
   const escondido = estaEscondido("carteira") && txt === null;
   return (
-    <input {...resto} type={escondido ? "text" : "number"} inputMode="decimal" step="0.01"
-      value={escondido ? "R$ •••••" : txt ?? String(Number(valor.toFixed(2)))}
+    <input {...resto} type={escondido ? "text" : "number"} inputMode="decimal" step={passo}
+      value={escondido ? mascara : txt ?? String(Number(valor.toFixed(2)))}
       onFocus={() => { if (txt === null) setTxt(String(Number(valor.toFixed(2)))); }}
       onChange={(e) => { setTxt(e.target.value); const n = Number(e.target.value); if (e.target.value !== "" && !Number.isNaN(n)) onCommit(n); }}
       onBlur={() => setTxt(null)} />
@@ -118,14 +118,22 @@ export default function Wallet() {
     setModal({ gid: g.id, tela: "lista" }); // volta para a lista, já com o novo investimento
   };
   const gm = modal ? lista.find((g) => g.id === modal.gid) : null; // grupo aberto no modal
-  const addTicker = (g, ticker) => atualizar(lista.map((x) => (x.id === g.id ? { ...x, itens: [...(x.itens || []), { id: novoId(), nome: ticker, inicial: 0 }] } : x)));
+  const addTicker = (g, ticker, qtd = 0, pm = 0) => atualizar(lista.map((x) => (x.id === g.id ? { ...x, itens: [...(x.itens || []), { id: novoId(), nome: ticker, inicial: Number((qtd * pm).toFixed(2)), ...(qtd > 0 && pm > 0 ? { qtd, pm } : {}) }] } : x)));
+  // quantidade e preço pago: o saldo investido passa a ser quantidade × preço pago
+  const mudarPos = (gid, it, patch, mov) => {
+    const n = { ...it, ...patch };
+    const q = Number(n.qtd) || 0, pm = Number(n.pm) || 0;
+    mudarI(gid, it.id, q > 0 && pm > 0 ? { ...patch, inicial: Number((q * pm - mov).toFixed(2)) } : patch);
+  };
   const alvo = (g) => PERFIS[perfil].alvo[g.id] ?? 0;
   const dif = (g, k) => { const d = pct(tot[k].saldo, total) - alvo(g); return d === 0 ? "na meta" : d > 0 ? `${d} p.p. acima` : `${-d} p.p. abaixo`; };
   const cotacao = (it) => mercado.mapa.get(achaTicker(it.nome)); // cotação real, se o nome tiver o código da ação
   const posicao = gm?.id === "acoes" ? (gm.itens || []).reduce((acc, it) => {
-    const c = cotacao(it), sd = saldoDe(it);
-    return c ? { n: acc.n + 1, dia: acc.dia + (sd * c.variacao) / (100 + c.variacao) } : acc;
-  }, { n: 0, dia: 0 }) : null;
+    const c = cotacao(it), sd = saldoDe(it), q = Number(it.qtd) || 0, pm = Number(it.pm) || 0;
+    if (!c) return acc;
+    const atual = q > 0 ? q * c.preco : sd;
+    return { n: acc.n + 1, dia: acc.dia + (atual * c.variacao) / (100 + c.variacao), custo: acc.custo + (q > 0 && pm > 0 ? q * pm : 0), valor: acc.valor + (q > 0 && pm > 0 ? atual : 0) };
+  }, { n: 0, dia: 0, custo: 0, valor: 0 }) : null;
   const km = gm ? lista.indexOf(gm) : -1;
   const r = gm ? rasc[gm.id] || { nome: "", valor: "" } : { nome: "", valor: "" };
 
@@ -208,7 +216,7 @@ export default function Wallet() {
               <div className="space-y-3">
                 <button type="button" onClick={() => setModal({ gid: gm.id, tela: "lista" })} className="text-sm text-suave underline">← Minha posição</button>
                 <p className="text-lg font-semibold">Ações da bolsa</p>
-                <Mercado mercado={mercado} jaTem={(gm.itens || []).map((i) => achaTicker(i.nome)).filter(Boolean)} onAdd={(tk) => addTicker(gm, tk)} />
+                <Mercado mercado={mercado} jaTem={(gm.itens || []).map((i) => achaTicker(i.nome)).filter(Boolean)} onAdd={(tk, q, pm) => addTicker(gm, tk, q, pm)} />
               </div>
             ) : modal.tela === "novo" ? (
               <form onSubmit={(e) => { e.preventDefault(); addItem(gm); }} className="space-y-3">
@@ -232,6 +240,9 @@ export default function Wallet() {
                     ) : (
                       <p className="mt-1 text-sm text-suave">{mercado.token ? (mercado.carregando ? "Carregando cotações…" : mercado.erro || "Cadastre suas ações pelo código (ex.: WEGE3) para ver a variação do dia.") : "Ligue as cotações em “Ver mais ações” para ver quanto suas ações sobem ou descem."}</p>
                     )}
+                    {posicao.custo > 0 && (
+                      <p className="mt-2 text-sm tabular-nums text-suave">Pago {brl(posicao.custo)} · hoje vale {brl(posicao.valor)} · resultado <b style={{ color: corVar(posicao.valor - posicao.custo) }}>{sinal(posicao.valor - posicao.custo)} ({fmtVar(((posicao.valor - posicao.custo) / posicao.custo) * 100)})</b></p>
+                    )}
                   </div>
                 )}
                 {!tot[km].n && <p className="text-sm text-suave">Nenhum investimento ainda.</p>}
@@ -245,6 +256,17 @@ export default function Wallet() {
                           <CampoValor className={campo} valor={saldo} onCommit={(n) => mudarI(gm.id, it.id, { inicial: Number((n - mov).toFixed(2)) })} aria-label={`Saldo de ${it.nome}`} />
                           <button type="button" onClick={() => remover(gm, it)} aria-label={`Remover ${it.nome}`} className="px-2 text-xl text-suave hover:text-tinta">×</button>
                         </div>
+                        {gm.id === "acoes" && (
+                          <div className="grid grid-cols-2 gap-2">
+                            <label className="block space-y-1"><span className="text-[11px] uppercase tracking-wider text-suave">Quantidade</span>
+                              <CampoValor className={campo} valor={Number(it.qtd) || 0} mascara="•••" passo="any" onCommit={(n) => mudarPos(gm.id, it, { qtd: n }, mov)} aria-label={`Quantidade de ${it.nome}`} /></label>
+                            <label className="block space-y-1"><span className="text-[11px] uppercase tracking-wider text-suave">Preço pago (por ação)</span>
+                              <CampoValor className={campo} valor={Number(it.pm) || 0} onCommit={(n) => mudarPos(gm.id, it, { pm: n }, mov)} aria-label={`Preço pago de ${it.nome}`} /></label>
+                          </div>
+                        )}
+                        {c && Number(it.qtd) > 0 && Number(it.pm) > 0 && (() => { const res = (c.preco - it.pm) * it.qtd; return (
+                          <p className="text-xs tabular-nums text-suave">Hoje vale {brl(c.preco * it.qtd)} · resultado <b style={{ color: corVar(res) }}>{sinal(res)} ({fmtVar(((c.preco - it.pm) / it.pm) * 100)})</b></p>
+                        ); })()}
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs tabular-nums text-suave">
                           {c && <span className="font-semibold" style={{ color: corVar(c.variacao) }}><Seta v={c.variacao} /> {fmtVar(c.variacao)} hoje</span>}
                           {rend !== 0 && <span>rendeu <b style={{ color: COR_REND }}>{sinal(rend)}</b></span>}
