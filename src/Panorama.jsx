@@ -127,6 +127,7 @@ export default function Panorama({ uid, token, hgKey, salvarHg }) {
   const [d, setD] = useState(null);
   const [carregando, setCarregando] = useState(false);
   const [chaveTxt, setChaveTxt] = useState("");
+  const [trocando, setTrocando] = useState(false);
   const [hist, setHist] = useState([]); // dias de preços guardados
   useEffect(() => { lerHistorico(uid).then(setHist, () => {}); }, [uid]);
 
@@ -176,13 +177,17 @@ export default function Panorama({ uid, token, hgKey, salvarHg }) {
               </div>
             </div>
             <div className="space-y-3 border-t border-white/10 pt-4">
-              <p className="text-sm font-semibold">Bolsas</p>
-              {!hgKey ? (
-                <form className="space-y-2" onSubmit={(e) => { e.preventDefault(); if (chaveTxt.trim()) salvarHg(chaveTxt); }}>
-                  <p className="text-sm text-suave">Para ver o Ibovespa (pontos) e as bolsas do mundo, crie uma chave gratuita em <b>hgbrasil.com/finance</b> e cole aqui. Fica salva só na sua conta.</p>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold">Bolsas</p>
+                {hgKey && !trocando && <button type="button" onClick={() => setTrocando(true)} className="text-xs text-suave underline">Trocar chave</button>}
+              </div>
+              {!hgKey || trocando ? (
+                <form className="space-y-2" onSubmit={(e) => { e.preventDefault(); if (chaveTxt.trim()) { salvarHg(chaveTxt); setChaveTxt(""); setTrocando(false); } }}>
+                  <p className="text-sm text-suave">{trocando ? "Cole a nova chave da HG Brasil (tipo Uso exposto, domínio orafinancebr.web.app)." : <>Para ver o Ibovespa (pontos) e as bolsas do mundo, crie uma chave gratuita em <b>hgbrasil.com/finance</b> e cole aqui. Fica salva só na sua conta.</>}</p>
                   <div className="flex gap-2">
                     <input className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-tinta" placeholder="Chave do HG Brasil" value={chaveTxt} onChange={(e) => setChaveTxt(e.target.value)} aria-label="Chave do HG Brasil" autoComplete="off" />
                     <button className="shrink-0 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-black">Salvar</button>
+                    {trocando && <button type="button" onClick={() => { setTrocando(false); setChaveTxt(""); }} className="shrink-0 text-sm text-suave underline">Cancelar</button>}
                   </div>
                 </form>
               ) : !d.indices || d.indices.erro ? (
